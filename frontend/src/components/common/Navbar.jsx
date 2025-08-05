@@ -25,122 +25,97 @@ export default function Navbar() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Change as needed for routing
+  // Navigation Links for Scroll
+  const links = (
+    <>
+      {navLinks.map((link) => (
+        <ScrollLink
+          key={link.to}
+          to={link.to}
+          smooth={true}
+          duration={500}
+          style={{
+            cursor: 'pointer',
+            color: 'inherit',
+            textDecoration: 'none',
+            fontWeight: 500,
+            padding: '0 8px',
+          }}
+          onClick={() => setDrawerOpen(false)}
+        >
+          {link.label}
+        </ScrollLink>
+      ))}
+    </>
+  );
+
   const handleSignUp = () => {};
   const handleLogin = () => {};
-
-  const activeBtn = "signup"; // or "login" if you want to highlight login
+  const activeBtn = "signup"; // or "login"
 
   return (
     <>
       <AppBar position="static" color="primary" elevation={0}>
         <Toolbar
           sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
             minHeight: { xs: 56, sm: 64 },
-            px: { xs: 1, sm: 3 },
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            position: 'relative'
           }}
         >
-          {/* Left: Logo */}
-          <Typography
-            variant="h6"
-            sx={{
-              fontWeight: 700,
-              color: "white",
-              letterSpacing: 1,
-              fontSize: { xs: "1rem", sm: "1.25rem" },
-              flexShrink: 0
-            }}
-          >
+          {/* Left - Company Name */}
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
             CompanyName
           </Typography>
 
-          {/* Center: Auth Buttons (desktop only) */}
-          {!isMobile && (
-            <Box sx={{
-              display: 'flex',
-              alignItems: 'center',
-              bgcolor: theme.palette.primary.light,
-              borderRadius: '32px',
-              p: '2px',
-              boxShadow: 1,
-              gap: 1,
-            }}>
-              <Button
-                variant="contained"
-                disableElevation
-                onClick={handleSignUp}
-                sx={{
-                  borderRadius: '32px',
-                  fontWeight: 700,
-                  px: 3,
-                  py: 0.5,
-                  fontSize: { xs: 13, sm: 15 },
-                  bgcolor: activeBtn === "signup" ? "white" : theme.palette.primary.light,
-                  color: activeBtn === "signup" ? theme.palette.primary.main : "white",
-                  minWidth: 80,
-                  boxShadow: "none",
-                }}
-              >
-                SIGN UP
-              </Button>
-              <Button
-                variant="contained"
-                disableElevation
-                onClick={handleLogin}
-                disabled={activeBtn !== "login"}
-                sx={{
-                  borderRadius: '32px',
-                  fontWeight: 700,
-                  px: 3,
-                  py: 0.5,
-                  fontSize: { xs: 13, sm: 15 },
-                  bgcolor: activeBtn === "login" ? "white" : "#d5dbe3",
-                  color: activeBtn === "login" ? theme.palette.primary.main : "#9fa9b3",
-                  minWidth: 80,
-                  boxShadow: "none",
-                  "&.Mui-disabled": {
-                    bgcolor: "#d5dbe3",
-                    color: "#9fa9b3"
-                  }
-                }}
-              >
-                LOGIN
-              </Button>
+          {/* Center - Links or Hamburger */}
+          {isMobile ? (
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              edge="start"
+              onClick={() => setDrawerOpen(true)}
+              sx={{ display: { md: 'none' } }}
+            >
+              <MenuIcon />
+            </IconButton>
+          ) : (
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 3,
+                justifyContent: 'center',
+                flex: 1,
+              }}
+            >
+              {links}
             </Box>
           )}
 
-          {/* Desktop Center: Nav Links - Mobile Right: Hamburger */}
-          <Box sx={{ flex: 1, display: 'flex', justifyContent: { xs: 'flex-end', md: 'center' }, alignItems: 'center' }}>
-            {!isMobile && navLinks.map((link) => (
-              <ScrollLink
-                key={link.to}
-                to={link.to}
-                smooth
-                duration={500}
-                style={navLinkStyle}
-              >
-                {link.label}
-              </ScrollLink>
-            ))}
-            {isMobile && (
-              <IconButton
+          {/* Right - Auth Buttons (DESKTOP only) */}
+          {!isMobile && (
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
                 color="inherit"
-                edge="end"
-                onClick={() => setDrawerOpen(true)}
-                size="large"
+                variant="outlined"
+                sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
               >
-                <MenuIcon fontSize="inherit" />
-              </IconButton>
-            )}
-          </Box>
+                Sign Up
+              </Button>
+              <Button
+                color="inherit"
+                variant="contained"
+                sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
+              >
+                Login
+              </Button>
+            </Box>
+          )}
         </Toolbar>
       </AppBar>
 
-      {/* Drawer at the right */}
+      {/* Drawer for mobile nav */}
       <Drawer
         anchor="right"
         open={drawerOpen}
@@ -151,7 +126,7 @@ export default function Navbar() {
         }}
       >
         <Box sx={{ pt: 2, px: 2 }}>
-          {/* Auth Buttons in Drawer - SIMPLE TEXT STYLE */}
+          {/* Simple Auth Buttons in Drawer (optional) */}
           <Box
             sx={{
               display: 'flex',
@@ -176,7 +151,7 @@ export default function Navbar() {
                 bgcolor: "transparent",
                 px: 1,
                 py: 0,
-                boxShadow: 'none'
+                boxShadow: 'none',
               }}
             >
               SIGN UP
@@ -206,10 +181,7 @@ export default function Navbar() {
           {/* Navigation Links */}
           <List>
             {navLinks.map((link) => (
-              <ListItemButton
-                key={link.to}
-                onClick={() => setDrawerOpen(false)}
-              >
+              <ListItemButton key={link.to} onClick={() => setDrawerOpen(false)}>
                 <ScrollLink
                   to={link.to}
                   smooth
@@ -234,16 +206,3 @@ export default function Navbar() {
     </>
   );
 }
-
-// Desktop nav link style
-const navLinkStyle = {
-  cursor: "pointer",
-  color: "white",
-  textDecoration: "none",
-  fontWeight: 500,
-  fontSize: "1rem",
-  padding: "6px 12px",
-  borderRadius: "8px",
-  transition: "background 0.2s",
-  marginRight: "4px"
-};
