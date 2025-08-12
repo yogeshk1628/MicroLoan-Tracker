@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -24,6 +25,8 @@ export default function Navbar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const navigate = useNavigate();
+
 
   // Navigation Links for Scroll
   const links = (
@@ -49,8 +52,13 @@ export default function Navbar() {
     </>
   );
 
-  const handleSignUp = () => {};
-  const handleLogin = () => {};
+  const handleSignUp = () => {
+    navigate('/signup');
+  };
+  const handleLogin = () => {
+    navigate('/login');
+  };
+
   const activeBtn = "signup"; // or "login"
 
   return (
@@ -99,14 +107,23 @@ export default function Navbar() {
               <Button
                 color="inherit"
                 variant="outlined"
+                onClick={() => handleSignUp()}
                 sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
               >
                 Sign Up
               </Button>
               <Button
-                color="inherit"
+                color="primary"
                 variant="contained"
-                sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
+                onClick={() => handleLogin()}
+                sx={{
+                  border: "1px solid #fff",
+                  borderRadius: 5,
+                  fontWeight: 700,
+                  px: 3,
+                  color: '#1565c0',
+                  backgroundColor: '#fff',
+                }}
               >
                 Login
               </Button>
@@ -160,12 +177,11 @@ export default function Navbar() {
               variant="text"
               disableElevation
               onClick={() => { setDrawerOpen(false); handleLogin(); }}
-              disabled={activeBtn !== "login"}
               sx={{
                 fontWeight: 700,
                 minWidth: 60,
                 fontSize: "1rem",
-                color: activeBtn === "login" ? theme.palette.primary.main : "#9fa9b3",
+                color: activeBtn === "login" ? theme.palette.primary.main : "#1565c0",
                 textTransform: 'uppercase',
                 borderRadius: 0,
                 bgcolor: "transparent",
