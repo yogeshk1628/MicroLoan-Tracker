@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const cors = require("cors");
 
 const UserRoutes = require("./routes/UserRoutes");
+const LoanRoutes = require("./routes/LoanRoutes");
 
 dotenv.config();
 connectDB();
@@ -13,6 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/api/auth", UserRoutes);
+app.use("/api", LoanRoutes);
 
 
 const PORT = process.env.PORT || 5000;
