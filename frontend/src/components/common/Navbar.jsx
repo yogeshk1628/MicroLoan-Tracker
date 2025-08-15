@@ -11,6 +11,7 @@ import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { Link as ScrollLink } from 'react-scroll';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -27,6 +28,9 @@ export default function Navbar() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
 
+  // Get user info from localStorage if logged in
+  const storedUser = localStorage.getItem('user');
+  const user = storedUser ? JSON.parse(storedUser) : null;
 
   // Navigation Links for Scroll
   const links = (
@@ -55,15 +59,21 @@ export default function Navbar() {
   const handleSignUp = () => {
     navigate('/signup');
   };
+  
   const handleLogin = () => {
     navigate('/login');
   };
-
-  const activeBtn = "signup"; // or "login"
+  
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    navigate('/');
+    window.location.reload(); // Refresh to update navbar state
+  };
 
   return (
     <>
-      <AppBar position="static" color="primary" elevation={0}>
+      <AppBar position="static" color="primary" elevation={0} sx={{borderRadius: 5}}>
         <Toolbar
           sx={{
             display: 'flex',
@@ -73,7 +83,11 @@ export default function Navbar() {
           }}
         >
           {/* Left - Company Name */}
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+          <Typography
+            variant="h6"
+            sx={{ fontWeight: 700, cursor: 'pointer' }}
+            onClick={() => navigate('/')}
+          >
             CompanyName
           </Typography>
 
@@ -94,39 +108,61 @@ export default function Navbar() {
                 display: 'flex',
                 gap: 3,
                 justifyContent: 'center',
-                flex: 1,
+                left: 200,
+                flex: 10,
               }}
             >
               {links}
             </Box>
           )}
 
-          {/* Right - Auth Buttons (DESKTOP only) */}
+          {/* Right - Auth Buttons or User Info (DESKTOP only) */}
           {!isMobile && (
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                color="inherit"
-                variant="outlined"
-                onClick={() => handleSignUp()}
-                sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
-              >
-                Sign Up
-              </Button>
-              <Button
-                color="primary"
-                variant="contained"
-                onClick={() => handleLogin()}
-                sx={{
-                  border: "1px solid #fff",
-                  borderRadius: 5,
-                  fontWeight: 700,
-                  px: 3,
-                  color: '#1565c0',
-                  backgroundColor: '#fff',
-                }}
-              >
-                Login
-              </Button>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              {user ? (
+                // Show user info when logged in
+                <>
+                  <AccountCircleIcon sx={{ mr: 1, fontSize: 28 }} />
+                  <Typography sx={{ mr: 2, fontWeight: 500 }}>
+                    {user.firstName} {user.lastName}
+                  </Typography>
+                  <Button
+                    color="inherit"
+                    variant="outlined"
+                    onClick={handleLogout}
+                    sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
+                  >
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                // Show login/signup buttons when not logged in
+                <>
+                  <Button
+                    color="inherit"
+                    variant="outlined"
+                    onClick={handleSignUp}
+                    sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
+                  >
+                    Sign Up
+                  </Button>
+                  <Button
+                    color="primary"
+                    variant="contained"
+                    onClick={handleLogin}
+                    sx={{
+                      border: '1px solid #fff',
+                      borderRadius: 5,
+                      fontWeight: 700,
+                      px: 3,
+                      color: '#1565c0',
+                      backgroundColor: '#fff',
+                    }}
+                  >
+                    Login
+                  </Button>
+                </>
+              )}
             </Box>
           )}
         </Toolbar>
@@ -139,61 +175,86 @@ export default function Navbar() {
         onClose={() => setDrawerOpen(false)}
         ModalProps={{ keepMounted: true }}
         sx={{
-          '& .MuiDrawer-paper': { width: 240, padding: 0 },
+          '& .MuiDrawer-paper': { width: 280, padding: 0 },
         }}
       >
         <Box sx={{ pt: 2, px: 2 }}>
-          {/* Simple Auth Buttons in Drawer (optional) */}
+          {/* Auth Section in Mobile Drawer */}
           <Box
             sx={{
               display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'center',
+              flexDirection: 'column',
               alignItems: 'center',
-              gap: 1,
+              gap: 2,
               mb: 3,
+              p: 2,
+              borderBottom: `1px solid ${theme.palette.divider}`,
             }}
           >
-            <Button
-              variant="text"
-              disableElevation
-              onClick={() => { setDrawerOpen(false); handleSignUp(); }}
-              sx={{
-                fontWeight: 700,
-                minWidth: 60,
-                fontSize: "1rem",
-                color: theme.palette.primary.main,
-                textTransform: 'uppercase',
-                borderRadius: 0,
-                bgcolor: "transparent",
-                px: 1,
-                py: 0,
-                boxShadow: 'none',
-              }}
-            >
-              SIGN UP
-            </Button>
-            <Button
-              variant="text"
-              disableElevation
-              onClick={() => { setDrawerOpen(false); handleLogin(); }}
-              sx={{
-                fontWeight: 700,
-                minWidth: 60,
-                fontSize: "1rem",
-                color: activeBtn === "login" ? theme.palette.primary.main : "#1565c0",
-                textTransform: 'uppercase',
-                borderRadius: 0,
-                bgcolor: "transparent",
-                px: 1,
-                py: 0,
-                boxShadow: 'none',
-                ml: 0.5,
-              }}
-            >
-              LOGIN
-            </Button>
+            {user ? (
+              // Show user profile in mobile drawer
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AccountCircleIcon sx={{ fontSize: 32 }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    {user.firstName} {user.lastName}
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    handleLogout();
+                  }}
+                  sx={{
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    borderRadius: 2,
+                    px: 3,
+                  }}
+                >
+                  Logout
+                </Button>
+              </>
+            ) : (
+              // Show login/signup in mobile drawer
+              <>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    handleSignUp();
+                  }}
+                  sx={{
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    borderRadius: 2,
+                    px: 4,
+                    width: '100%',
+                  }}
+                >
+                  Sign Up
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    handleLogin();
+                  }}
+                  sx={{
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    borderRadius: 2,
+                    px: 4,
+                    width: '100%',
+                  }}
+                >
+                  Login
+                </Button>
+              </>
+            )}
           </Box>
+
           {/* Navigation Links */}
           <List>
             {navLinks.map((link) => (
@@ -203,13 +264,13 @@ export default function Navbar() {
                   smooth
                   duration={500}
                   style={{
-                    cursor: "pointer",
+                    cursor: 'pointer',
                     color: theme.palette.primary.main,
-                    textDecoration: "none",
-                    width: "100%",
-                    display: "block",
+                    textDecoration: 'none',
+                    width: '100%',
+                    display: 'block',
                     fontWeight: 600,
-                    fontSize: "1rem",
+                    fontSize: '1rem',
                   }}
                 >
                   <ListItemText primary={link.label} />

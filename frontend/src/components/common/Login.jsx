@@ -39,7 +39,7 @@ const Login = () => {
         if (role === "admin") {
           navigate("/admin/dashboard");
         } else if (role === "user") {
-          navigate("/");
+          navigate("/dashboard");
         } else {
           toast.error("Unrecognized role");
         }
