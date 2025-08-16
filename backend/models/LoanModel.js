@@ -1,42 +1,44 @@
 const mongoose = require("mongoose");
 
+const repaymentSchema = new mongoose.Schema({
+  day: Number, // day number in term (1 to 60)
+  dueAmount: { type: Number, default: 100 }, // default daily repayment
+  paidAmount: { type: Number, default: 0 },
+  isPaid: { type: Boolean, default: false },
+  date: { type: Date }
+});
+
 const loanSchema = new mongoose.Schema(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: true
     },
     loanAmount: {
       type: Number,
-      required: true,
-      min: 0,
+      default: 5000
     },
     interestRate: {
       type: Number,
-      required: true,
-      min: 0,
+      default: 20 // percent
     },
-    termMonths: {
+    termDays: {
       type: Number,
-      required: true,
-      min: 1,
+      default: 60
     },
-    purpose: {
-      type: String,
-      required: true,
-      trim: true,
+    dailyPayment: {
+      type: Number,
+      default: 100
     },
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: ["pending", "approved", "rejected", "active", "completed"],
+      default: "pending"
     },
-    approvedDate: {
-      type: Date,
-    },
+    repayments: [repaymentSchema]
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model('loan', loanSchema);
+module.exports = mongoose.model("Loan", loanSchema);
