@@ -11,7 +11,6 @@ import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { Link as ScrollLink } from 'react-scroll';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
@@ -27,10 +26,6 @@ export default function Navbar() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
-
-  // Get user info from localStorage if logged in
-  const storedUser = localStorage.getItem('user');
-  const user = storedUser ? JSON.parse(storedUser) : null;
 
   // Navigation Links for Scroll
   const links = (
@@ -62,13 +57,6 @@ export default function Navbar() {
   
   const handleLogin = () => {
     navigate('/login');
-  };
-  
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/');
-    window.location.reload(); // Refresh to update navbar state
   };
 
   return (
@@ -116,53 +104,32 @@ export default function Navbar() {
             </Box>
           )}
 
-          {/* Right - Auth Buttons or User Info (DESKTOP only) */}
+          {/* Right - Auth Buttons (DESKTOP only) */}
           {!isMobile && (
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              {user ? (
-                // Show user info when logged in
-                <>
-                  <AccountCircleIcon sx={{ mr: 1, fontSize: 28 }} />
-                  <Typography sx={{ mr: 2, fontWeight: 500 }}>
-                    {user.firstName} {user.lastName}
-                  </Typography>
-                  <Button
-                    color="inherit"
-                    variant="outlined"
-                    onClick={handleLogout}
-                    sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
-                  >
-                    Logout
-                  </Button>
-                </>
-              ) : (
-                // Show login/signup buttons when not logged in
-                <>
-                  <Button
-                    color="inherit"
-                    variant="outlined"
-                    onClick={handleSignUp}
-                    sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
-                  >
-                    Sign Up
-                  </Button>
-                  <Button
-                    color="primary"
-                    variant="contained"
-                    onClick={handleLogin}
-                    sx={{
-                      border: '1px solid #fff',
-                      borderRadius: 5,
-                      fontWeight: 700,
-                      px: 3,
-                      color: '#1565c0',
-                      backgroundColor: '#fff',
-                    }}
-                  >
-                    Login
-                  </Button>
-                </>
-              )}
+              <Button
+                color="inherit"
+                variant="outlined"
+                onClick={handleSignUp}
+                sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
+              >
+                Sign Up
+              </Button>
+              <Button
+                color="primary"
+                variant="contained"
+                onClick={handleLogin}
+                sx={{
+                  border: '1px solid #fff',
+                  borderRadius: 5,
+                  fontWeight: 700,
+                  px: 3,
+                  color: '#1565c0',
+                  backgroundColor: '#fff',
+                }}
+              >
+                Login
+              </Button>
             </Box>
           )}
         </Toolbar>
@@ -191,68 +158,38 @@ export default function Navbar() {
               borderBottom: `1px solid ${theme.palette.divider}`,
             }}
           >
-            {user ? (
-              // Show user profile in mobile drawer
-              <>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AccountCircleIcon sx={{ fontSize: 32 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    {user.firstName} {user.lastName}
-                  </Typography>
-                </Box>
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    setDrawerOpen(false);
-                    handleLogout();
-                  }}
-                  sx={{
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    borderRadius: 2,
-                    px: 3,
-                  }}
-                >
-                  Logout
-                </Button>
-              </>
-            ) : (
-              // Show login/signup in mobile drawer
-              <>
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    setDrawerOpen(false);
-                    handleSignUp();
-                  }}
-                  sx={{
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    borderRadius: 2,
-                    px: 4,
-                    width: '100%',
-                  }}
-                >
-                  Sign Up
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={() => {
-                    setDrawerOpen(false);
-                    handleLogin();
-                  }}
-                  sx={{
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    borderRadius: 2,
-                    px: 4,
-                    width: '100%',
-                  }}
-                >
-                  Login
-                </Button>
-              </>
-            )}
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setDrawerOpen(false);
+                handleSignUp();
+              }}
+              sx={{
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                borderRadius: 2,
+                px: 4,
+                width: '100%',
+              }}
+            >
+              Sign Up
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => {
+                setDrawerOpen(false);
+                handleLogin();
+              }}
+              sx={{
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                borderRadius: 2,
+                px: 4,
+                width: '100%',
+              }}
+            >
+              Login
+            </Button>
           </Box>
 
           {/* Navigation Links */}

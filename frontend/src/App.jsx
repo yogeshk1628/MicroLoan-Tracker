@@ -4,7 +4,7 @@ import viteLogo from '/vite.svg'
 import HomePage from './components/common/HomePage'
 import Signup from "./components/common/Signup";
 import Login from "./components/common/Login";
-import Dashboard from "./components/pages/Dashboard";
+import UserDashboard from './components/user/UserDashboard';
 import { Route, Routes } from 'react-router-dom'
 //import './App.css'
 
@@ -17,7 +17,7 @@ function App() {
           <Route path="/" element={<HomePage />}></Route>
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard" element={<UserDashboard />} />
         </Routes>
     </>
   )
