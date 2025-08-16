@@ -1,6 +1,7 @@
 const express = require("express");
-const { signup, loginUser } = require("../controllers/UserContoller");
 const multer = require("multer");
+const { signup, loginUser, getUsersById } = require("../controllers/UserContoller"); 
+const { verifyToken, authorizedRoles } = require("../middleware/AuthMiddleware"); 
 const router = express.Router();
 
 const storage = multer.diskStorage({
@@ -11,7 +12,7 @@ const upload = multer({ storage });
 
 router.post("/signup", upload.none(), signup);
 router.post("/login", loginUser);
-// router.get("/user/:id", verifyToken, authorizedRoles("user"), getUsersById);
+router.get("/user/:id", verifyToken, authorizedRoles("user"), getUsersById);
 // router.put("/updateuserprofile/:id", verifyToken, authorizedRoles("user"), updateuserProfile);
 // router.put("/updateuserpassword/:id", verifyToken, authorizedRoles("user"), updateuserPassword);
 // router.post("/forgot-password", forgotPassword);

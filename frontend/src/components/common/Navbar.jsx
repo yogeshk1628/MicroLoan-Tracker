@@ -14,11 +14,17 @@ import ListItemText from '@mui/material/ListItemText';
 import { Link as ScrollLink } from 'react-scroll';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import InfoIcon from '@mui/icons-material/Info';
+import HelpIcon from '@mui/icons-material/Help';
+import BusinessIcon from '@mui/icons-material/Business';
+import RoomServiceIcon from '@mui/icons-material/RoomService';
+import { Chip } from '@mui/material';
 
 const navLinks = [
-  { label: 'FAQ', to: 'faq' },
-  { label: 'SERVICES', to: 'services' },
-  { label: 'ABOUT US', to: 'aboutus' },
+  { label: 'FAQ', to: 'faq', icon: <HelpIcon /> },
+  { label: 'SERVICES', to: 'services', icon: <RoomServiceIcon /> },
+  { label: 'ABOUT US', to: 'aboutus', icon: <InfoIcon /> },
 ];
 
 export default function Navbar() {
@@ -27,7 +33,7 @@ export default function Navbar() {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
 
-  // Navigation Links for Scroll
+  // Navigation Links for Scroll (Desktop)
   const links = (
     <>
       {navLinks.map((link) => (
@@ -36,16 +42,25 @@ export default function Navbar() {
           to={link.to}
           smooth={true}
           duration={500}
-          style={{
-            cursor: 'pointer',
-            color: 'inherit',
-            textDecoration: 'none',
-            fontWeight: 500,
-            padding: '0 8px',
-          }}
+          style={{ cursor: 'pointer', color: 'inherit', textDecoration: 'none' }}
           onClick={() => setDrawerOpen(false)}
         >
-          {link.label}
+          <Button
+            startIcon={link.icon}
+            sx={{
+              color: 'inherit',
+              fontWeight: 500,
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 2,
+              py: 1,
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              },
+            }}
+          >
+            {link.label}
+          </Button>
         </ScrollLink>
       ))}
     </>
@@ -61,57 +76,83 @@ export default function Navbar() {
 
   return (
     <>
-      <AppBar position="static" color="primary" elevation={0} sx={{borderRadius: 5}}>
+      <AppBar 
+        position="static" 
+        sx={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          borderRadius: 5,
+          mb: 2,
+        }}
+        elevation={6}
+      >
         <Toolbar
           sx={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             minHeight: { xs: 56, sm: 64 },
+            px: { xs: 2, sm: 3 },
           }}
         >
-          {/* Left - Company Name */}
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 700, cursor: 'pointer' }}
-            onClick={() => navigate('/')}
-          >
-            CompanyName
-          </Typography>
-
-          {/* Center - Links or Hamburger */}
-          {isMobile ? (
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              edge="start"
-              onClick={() => setDrawerOpen(true)}
-              sx={{ display: { md: 'none' } }}
+          {/* Left - Company Name with Icon */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography
+              variant="h6"
+              sx={{ 
+                fontWeight: 700, 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+              }}
+              onClick={() => navigate('/')}
             >
-              <MenuIcon />
-            </IconButton>
-          ) : (
+              <BusinessIcon sx={{ fontSize: 28 }} />
+              CompanyName
+            </Typography>
+            <Chip
+              label="VISITOR"
+              size="small"
+              sx={{
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                color: 'white',
+                fontWeight: 'bold',
+                fontSize: '0.75rem',
+              }}
+            />
+          </Box>
+
+          {/* Center - Navigation Links (Desktop) */}
+          {!isMobile && (
             <Box
               sx={{
                 display: 'flex',
-                gap: 3,
+                gap: 1,
                 justifyContent: 'center',
-                left: 200,
-                flex: 10,
+                flex: 1,
               }}
             >
               {links}
             </Box>
           )}
 
-          {/* Right - Auth Buttons (DESKTOP only) */}
-          {!isMobile && (
+          {/* Right - Auth Buttons (Desktop) */}
+          {!isMobile ? (
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               <Button
                 color="inherit"
                 variant="outlined"
                 onClick={handleSignUp}
-                sx={{ borderRadius: 5, fontWeight: 700, px: 3 }}
+                sx={{ 
+                  borderRadius: 3, 
+                  fontWeight: 700, 
+                  px: 3,
+                  borderColor: 'rgba(255, 255, 255, 0.5)',
+                  '&:hover': {
+                    borderColor: 'white',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  },
+                }}
               >
                 Sign Up
               </Button>
@@ -120,97 +161,154 @@ export default function Navbar() {
                 variant="contained"
                 onClick={handleLogin}
                 sx={{
-                  border: '1px solid #fff',
-                  borderRadius: 5,
+                  borderRadius: 3,
                   fontWeight: 700,
                   px: 3,
-                  color: '#1565c0',
-                  backgroundColor: '#fff',
+                  ml: 1,
+                  color: '#667eea',
+                  backgroundColor: 'white',
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                  },
                 }}
               >
                 Login
               </Button>
             </Box>
+          ) : (
+            // Mobile - Hamburger Menu
+            <IconButton
+              color="inherit"
+              aria-label="open drawer"
+              onClick={() => setDrawerOpen(true)}
+              sx={{ 
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                borderRadius: 2,
+              }}
+            >
+              <MenuIcon />
+            </IconButton>
           )}
         </Toolbar>
       </AppBar>
 
-      {/* Drawer for mobile nav */}
+      {/* Mobile Drawer */}
       <Drawer
         anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         ModalProps={{ keepMounted: true }}
         sx={{
-          '& .MuiDrawer-paper': { width: 280, padding: 0 },
+          '& .MuiDrawer-paper': { 
+            width: 320, 
+            background: 'linear-gradient(180deg, #667eea 0%, #764ba2 100%)',
+            color: 'white',
+          },
         }}
       >
-        <Box sx={{ pt: 2, px: 2 }}>
-          {/* Auth Section in Mobile Drawer */}
+        <Box sx={{ pt: 3, px: 3 }}>
+          {/* Welcome Section in Mobile Drawer */}
           <Box
             sx={{
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               gap: 2,
-              mb: 3,
-              p: 2,
-              borderBottom: `1px solid ${theme.palette.divider}`,
+              mb: 4,
+              p: 3,
+              borderRadius: 3,
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
             }}
           >
-            <Button
-              variant="outlined"
-              onClick={() => {
-                setDrawerOpen(false);
-                handleSignUp();
-              }}
-              sx={{
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                borderRadius: 2,
-                px: 4,
-                width: '100%',
-              }}
-            >
-              Sign Up
-            </Button>
-            <Button
-              variant="contained"
-              onClick={() => {
-                setDrawerOpen(false);
-                handleLogin();
-              }}
-              sx={{
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                borderRadius: 2,
-                px: 4,
-                width: '100%',
-              }}
-            >
-              Login
-            </Button>
+            <AccountCircleIcon sx={{ fontSize: 48 }} />
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Welcome Visitor
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                Join us today!
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1, width: '100%' }}>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  handleSignUp();
+                }}
+                sx={{
+                  flex: 1,
+                  borderColor: 'rgba(255, 255, 255, 0.5)',
+                  color: 'white',
+                  fontWeight: 700,
+                  borderRadius: 3,
+                  '&:hover': {
+                    borderColor: 'white',
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  },
+                }}
+              >
+                Sign Up
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  handleLogin();
+                }}
+                sx={{
+                  flex: 1,
+                  backgroundColor: 'white',
+                  color: '#667eea',
+                  fontWeight: 700,
+                  borderRadius: 3,
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                  },
+                }}
+              >
+                Login
+              </Button>
+            </Box>
           </Box>
 
           {/* Navigation Links */}
-          <List>
+          <List sx={{ pt: 0 }}>
             {navLinks.map((link) => (
-              <ListItemButton key={link.to} onClick={() => setDrawerOpen(false)}>
+              <ListItemButton 
+                key={link.to} 
+                onClick={() => setDrawerOpen(false)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 1,
+                  '&:hover': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  },
+                }}
+              >
                 <ScrollLink
                   to={link.to}
                   smooth
                   duration={500}
                   style={{
                     cursor: 'pointer',
-                    color: theme.palette.primary.main,
+                    color: 'inherit',
                     textDecoration: 'none',
                     width: '100%',
                     display: 'block',
-                    fontWeight: 600,
-                    fontSize: '1rem',
                   }}
                 >
-                  <ListItemText primary={link.label} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%' }}>
+                    {link.icon}
+                    <ListItemText 
+                      primary={link.label}
+                      primaryTypographyProps={{
+                        fontWeight: 600,
+                        fontSize: '1rem',
+                      }}
+                    />
+                  </Box>
                 </ScrollLink>
               </ListItemButton>
             ))}

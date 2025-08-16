@@ -70,4 +70,26 @@ const loginUser = async (req, res) => {
   }
 };
 
-module.exports = { signup, loginUser }
+const getUsersById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Only allow users to get their own data or admin to get any user data
+    if (req.user.role !== 'admin' && req.user._id.toString() !== id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
+    const user = await User.findById(id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    res.json(user);
+  } catch (error) {
+    console.error("Get user by ID error:", error);
+    res.status(500).json({ message: "Error fetching user", error: error.message });
+  }
+};
+
+module.exports = { signup, loginUser, getUsersById }
