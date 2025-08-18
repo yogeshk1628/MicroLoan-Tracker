@@ -13,8 +13,8 @@ const upload = multer({ storage });
 router.post("/signup", upload.none(), signup);
 router.post("/login", loginUser);
 router.get("/user/:id", verifyToken, authorizedRoles("user"), getUsersById);
-// router.put("/updateuserprofile/:id", verifyToken, authorizedRoles("user"), updateuserProfile);
-// router.put("/updateuserpassword/:id", verifyToken, authorizedRoles("user"), updateuserPassword);
+router.put("/updateuserprofile/:id", verifyToken, authorizedRoles("user"), updateuserProfile);
+router.put("/updateuserpassword/:id", verifyToken, authorizedRoles("user"), updateuserPassword);
 // router.post("/forgot-password", forgotPassword);
 // router.post("/reset-password/:token", resetPassword);
 
