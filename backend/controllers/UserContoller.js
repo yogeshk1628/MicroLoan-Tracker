@@ -135,5 +135,34 @@ const updateuserPassword = async (req, res) => {
   }
 };
 
+const toggleUserStatus = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { isActive } = req.body;
 
-module.exports = { signup, loginUser, getUsersById, updateuserPassword, updateuserProfile }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.isActive = isActive;
+    await user.save();
+
+    res.status(200).json({ 
+      message: "User status updated successfully", 
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        isActive: user.isActive
+      }
+    });
+  } catch (error) {
+    console.error("Error toggling user status:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+module.exports = { signup, loginUser, getUsersById, updateuserPassword, updateuserProfile, toggleUserStatus }

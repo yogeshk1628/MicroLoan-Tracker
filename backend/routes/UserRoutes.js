@@ -1,6 +1,6 @@
 const express = require("express");
 const multer = require("multer");
-const { signup, loginUser, getUsersById } = require("../controllers/UserContoller"); 
+const { signup, loginUser, getUsersById, updateuserPassword, updateuserProfile } = require("../controllers/UserContoller"); 
 const { verifyToken, authorizedRoles } = require("../middleware/AuthMiddleware"); 
 const router = express.Router();
 

@@ -2,7 +2,13 @@ const Loan = require("../models/LoanModel");
 
 const createLoan = async (req, res) => {
   try {
-    const userId = req.user?.id;
+    // Get the authenticated user's id and role
+    const authenticatedUserId = req.user?.id;
+    const role = req.user?.role;
+
+    // Allow admin to specify userId in request, otherwise use their own id
+    const requestedUserId = req.body.userId;
+    const userId = role === "admin" && requestedUserId ? requestedUserId : authenticatedUserId;
 
     // Validate user ID
     if (!userId) {
@@ -12,7 +18,7 @@ const createLoan = async (req, res) => {
       });
     }
 
-    // Check if user already has an active or pending loan
+    // Check if target user already has an active or pending loan
     const existingLoan = await Loan.findOne({ 
       user: userId, 
       status: { $in: ['pending', 'active'] } 
@@ -20,17 +26,23 @@ const createLoan = async (req, res) => {
 
     if (existingLoan) {
       return res.status(400).json({
-        message: "You already have an active or pending loan",
+        message: "User already has an active or pending loan",
         error: "Duplicate loan application"
       });
     }
 
-    // Create repayment schedule (60 days × ₹100/day)
+    // Use terms provided in request, fallback to defaults if missing
+    const loanAmount = req.body.loanAmount || 5000;
+    const termDays = req.body.termDays || 60;
+    const dailyPayment = req.body.dailyPayment || 100;
+    const interestRate = req.body.interestRate || 20;
+
+    // Create repayment schedule
     let repayments = [];
-    for (let day = 1; day <= 60; day++) {
+    for (let day = 1; day <= termDays; day++) {
       repayments.push({
         day,
-        dueAmount: 100,
+        dueAmount: dailyPayment,
         paidAmount: 0,
         isPaid: false
       });
@@ -38,10 +50,10 @@ const createLoan = async (req, res) => {
 
     const newLoan = new Loan({
       user: userId,
-      loanAmount: 5000,
-      interestRate: 20, // percent
-      termDays: 60,
-      dailyPayment: 100,
+      loanAmount,
+      interestRate,
+      termDays,
+      dailyPayment,
       status: "pending",
       repayments
     });
@@ -49,7 +61,7 @@ const createLoan = async (req, res) => {
     await newLoan.save();
 
     res.status(201).json({
-      message: "Loan created successfully with fixed terms",
+      message: "Loan created successfully",
       loan: newLoan
     });
   } catch (error) {
@@ -61,10 +73,11 @@ const createLoan = async (req, res) => {
   }
 };
 
+
 const DAILY_PAYMENT = 100;
 const PENALTY_RATE = 0.2; // 20% per day on missed amount
 
-const calculatePenalties = async (req, res) => {
+/*const calculatePenalties = async (req, res) => {
   try {
     const { loanId } = req.params;
     
@@ -126,7 +139,7 @@ const calculatePenalties = async (req, res) => {
       error: error.message 
     });
   }
-};
+};*/
 
 const confirmRepayment = async (req, res) => {
   try {
@@ -377,6 +390,61 @@ const getUserLoans = async (req, res) => {
     });
   }
 };
+
+const calculatePenalties = async (req, res) => {
+  try {
+    const { loanId } = req.params;
+    
+    const loan = await Loan.findById(loanId).populate('user');
+    if (!loan) {
+      return res.status(404).json({ message: "Loan not found" });
+    }
+
+    const currentDate = new Date();
+    const penaltyRate = 0.05; // 5% per day penalty rate
+    let totalPenalty = 0;
+    let daysOverdue = 0;
+    const penaltyDetails = [];
+
+    if (loan.repayments && loan.repayments.length > 0) {
+      loan.repayments.forEach((repayment, index) => {
+        if (!repayment.isPaid) {
+          // Calculate days overdue for this payment
+          const dueDate = new Date(loan.createdAt);
+          dueDate.setDate(dueDate.getDate() + repayment.day);
+          
+          if (currentDate > dueDate) {
+            const daysLate = Math.floor((currentDate - dueDate) / (1000 * 60 * 60 * 24));
+            const penaltyAmount = repayment.dueAmount * (penaltyRate / 100) * daysLate;
+            
+            totalPenalty += penaltyAmount;
+            daysOverdue = Math.max(daysOverdue, daysLate);
+            
+            penaltyDetails.push({
+              day: repayment.day,
+              dueAmount: repayment.dueAmount,
+              daysLate: daysLate,
+              penalty: penaltyAmount
+            });
+          }
+        }
+      });
+    }
+
+    res.status(200).json({
+      loanId: loan._id,
+      borrower: `${loan.user.firstName} ${loan.user.lastName}`,
+      totalPenalty: totalPenalty,
+      daysOverdue: daysOverdue,
+      penaltyRate: penaltyRate,
+      details: penaltyDetails
+    });
+  } catch (error) {
+    console.error("Error calculating penalties:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 
 module.exports = { 
   createLoan, 
