@@ -8,6 +8,9 @@ const sendWelcomeEmail = async(toEmail, userName) =>{
                 user: process.env.MAIL_USER,
                 pass: process.env.MAIL_PASS,
             },
+                tls: {
+                rejectUnauthorized: false
+            }
         });
 
         const MailOptions = {
@@ -21,7 +24,7 @@ const sendWelcomeEmail = async(toEmail, userName) =>{
         <br />
         <p>Regards,</p>
         <p><b>Team</b></p>
-      `,
+      `,  
     };
 
     await transporter.sendMail(MailOptions);

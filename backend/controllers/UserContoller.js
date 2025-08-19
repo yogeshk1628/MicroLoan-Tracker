@@ -14,7 +14,7 @@ const secretKey = process.env.JWT_SECRET;
 
 const signup = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, gender, contactNumber, role = "user" } = req.body;
+    const { firstName, lastName, email, password, gender, contactNumber, role = "user", isActive } = req.body;
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
@@ -24,7 +24,8 @@ const signup = async (req, res) => {
       password: hashedPassword,
       gender,
       contactNumber,
-      role
+      role,
+      isActive
     });
 
     await newUser.save();
@@ -58,6 +59,7 @@ const loginUser = async (req, res) => {
         lastName: existingUser.lastName,
         contactNumber: existingUser.contactNumber,
         gender: existingUser.gender,
+        isActive: existingUser.isActive,
       },
       secretKey,
       { expiresIn: '1y' }

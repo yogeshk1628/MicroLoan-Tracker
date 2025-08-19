@@ -69,6 +69,11 @@ export default function Navbar({ userProfile, onLogout }) {
     window.location.reload();
   };
 
+  // NEW: Handle profile click
+  const handleProfileClick = () => {
+    navigate('/profile');
+  };
+
   return (
     <>
       <AppBar 
@@ -100,7 +105,7 @@ export default function Navbar({ userProfile, onLogout }) {
                 alignItems: 'center',
                 gap: 1,
               }}
-              onClick={() => navigate('/admin/users')}
+              onClick={() => navigate('/admin/dashboard')}
             >
               <AdminPanelSettingsIcon sx={{ fontSize: 28 }} />
               CompanyName
@@ -131,11 +136,16 @@ export default function Navbar({ userProfile, onLogout }) {
             </Box>
           )}
 
-          {/* Right - Admin Profile & Logout (Without Red Badge) */}
+          {/* Right - Admin Profile & Logout (Clickable Profile) */}
           {!isMobile ? (
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <AccountCircleIcon sx={{ fontSize: 32 }} />
-              <Box sx={{ ml: 1 }}>
+              <IconButton onClick={handleProfileClick} sx={{ color: 'inherit' }}>
+                <AccountCircleIcon sx={{ fontSize: 32 }} />
+              </IconButton>
+              <Box 
+                sx={{ ml: 1, cursor: 'pointer' }}
+                onClick={handleProfileClick}
+              >
                 <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                   {user?.firstName || 'Admin'} {user?.lastName || 'User'}
                 </Typography>
@@ -194,7 +204,7 @@ export default function Navbar({ userProfile, onLogout }) {
         }}
       >
         <Box sx={{ pt: 3, px: 3 }}>
-          {/* Admin Profile Section in Mobile Drawer (Without Red Badge) */}
+          {/* Admin Profile Section in Mobile Drawer (Clickable) */}
           <Box
             sx={{
               display: 'flex',
@@ -206,6 +216,11 @@ export default function Navbar({ userProfile, onLogout }) {
               borderRadius: 3,
               backgroundColor: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'blur(10px)',
+              cursor: 'pointer',
+            }}
+            onClick={() => {
+              setDrawerOpen(false);
+              handleProfileClick();
             }}
           >
             <AccountCircleIcon sx={{ fontSize: 48 }} />
@@ -217,28 +232,31 @@ export default function Navbar({ userProfile, onLogout }) {
                 System Administrator
               </Typography>
             </Box>
-            <Button
-              variant="contained"
-              onClick={() => {
-                setDrawerOpen(false);
-                handleLogout();
-              }}
-              sx={{
-                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                color: 'white',
-                fontWeight: 700,
-                borderRadius: 3,
-                px: 4,
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                },
-              }}
-            >
-              Logout
-            </Button>
           </Box>
 
-          {/* Admin Navigation Links (Filtered) */}
+          <Button
+            variant="contained"
+            onClick={() => {
+              setDrawerOpen(false);
+              handleLogout();
+            }}
+            sx={{
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              color: 'white',
+              fontWeight: 700,
+              borderRadius: 3,
+              px: 4,
+              mb: 3,
+              width: '100%',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+              },
+            }}
+          >
+            Logout
+          </Button>
+
+          {/* Admin Navigation Links */}
           <List sx={{ pt: 0 }}>
             {adminNavLinks.map((link) => (
               <ListItemButton 

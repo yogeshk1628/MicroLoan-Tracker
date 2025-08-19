@@ -6,6 +6,7 @@ import UserDashboard from './components/user/UserDashboard';
 import { Route, Routes } from 'react-router-dom'
 import AdminDashboard from './components/admin/AdminDashboard';
 import CustomToastContainer from './components/common/ToastContainer';
+import Profile from './components/admin/Profile';
 //import './App.css'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<UserDashboard />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/profile/" element={<Profile />} />
         </Routes>
 
 
