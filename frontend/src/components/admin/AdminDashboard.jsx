@@ -219,8 +219,8 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
   const handleCalculatePenalties = async (loanId) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/loans/calculate-penalties/${loanId}`, {
-        method: "POST",
+      const res = await fetch(`${API_BASE_URL}/api/${loanId}/penalty`, {
+        method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json",
