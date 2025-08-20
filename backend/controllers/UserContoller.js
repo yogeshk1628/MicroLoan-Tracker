@@ -7,11 +7,6 @@ const cors = require("cors");
 const { sendWelcomeEmail } = require("../middleware/MailMiddleware");
 
 const secretKey = process.env.JWT_SECRET;
-
-
-
-
-
 const signup = async (req, res) => {
   try {
     const { firstName, lastName, email, password, gender, contactNumber, role = "user", isActive } = req.body;
