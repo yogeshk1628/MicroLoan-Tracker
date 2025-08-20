@@ -163,42 +163,46 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
     }
   };
 
-  const handleConfirmRepayment = async (loanId, day, isPaid) => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/loans/confirm-repayment`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ loanId, day, isPaid }),
-      });
-      if (!res.ok) throw new Error("Failed to confirm repayment");
-      showToast?.("Repayment confirmed successfully", "success");
-      
-      const loanRes = await fetch(`${API_BASE_URL}/api/loans/${loanId}`, {
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (loanRes.ok) {
-        const loanData = await loanRes.json();
-        setSelectedLoan(loanData);
-      }
-      
-      setOpenPaymentHistory(false);
-      fetchAllLoans();
-    } catch {
-      showToast?.("Failed to confirm repayment", "error");
+  const handleConfirmRepayment = async (loanId, day, paidAmount) => {
+  try {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}/repay`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ day, paidAmount }),  // ✅ send exact paid amount
+    });
+
+    if (!res.ok) throw new Error("Failed to record repayment");
+
+    showToast?.("Repayment recorded successfully", "success");
+
+    // Refresh loan data
+    const loanRes = await fetch(`${API_BASE_URL}/api/loans/${loanId}`, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (loanRes.ok) {
+      const loanData = await loanRes.json();
+      setSelectedLoan(loanData);
     }
-  };
+
+    setOpenPaymentHistory(false);
+    fetchAllLoans();
+  } catch {
+    showToast?.("Failed to record repayment", "error");
+  }
+};
+
 
   const handleUpdateLoanStatus = async (loanId, status) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/${loanId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}`, {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -216,25 +220,25 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
     }
   };
 
-  const handleCalculatePenalties = async (loanId) => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/${loanId}/penalty`, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      if (!res.ok) throw new Error("Failed to calculate penalties");
-      const data = await res.json();
-      setPenaltyData(data);
-      setOpenPenaltyCalculator(true);
-      showToast?.("Penalties calculated successfully", "success");
-    } catch {
-      showToast?.("Failed to calculate penalties", "error");
-    }
-  };
+  const handleGetRemainingBalance = async (loanId) => {
+  try {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}/remaining-balance`, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (!res.ok) throw new Error("Failed to fetch remaining balance");
+
+    const data = await res.json();
+    setSelectedLoan(data); // store full loan with balance + penalties
+    showToast?.("Remaining balance fetched successfully", "success");
+  } catch {
+    showToast?.("Failed to fetch remaining balance", "error");
+  }
+};
+
 
   const handleDeleteLoan = async (loanId) => {
     try {
@@ -1478,7 +1482,7 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
                                           '&:hover': { backgroundColor: isHistoryAndPenaltyDisabled ? 'grey.300' : 'warning.dark' },
                                           borderRadius: 2
                                         }}
-                                        onClick={() => handleCalculatePenalties(loan._id)}
+                                        onClick={() => handleGetRemainingBalance(loan._id)}
                                       >
                                         <Calculate />
                                       </IconButton>

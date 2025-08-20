@@ -141,102 +141,126 @@ const PENALTY_RATE = 0.2; // 20% per day on missed amount
   }
 };*/
 
-const confirmRepayment = async (req, res) => {
-  try {
-    const { loanId, day, isPaid } = req.body;
+// const confirmRepayment = async (req, res) => {
+//   try {
+//     const { loanId, day, isPaid } = req.body;
 
-    // Validate input
-    if (!loanId || day === undefined || isPaid === undefined) {
-      return res.status(400).json({ 
-        message: "Missing required fields: loanId, day, isPaid" 
-      });
-    }
+//     // Validate input
+//     if (!loanId || day === undefined || isPaid === undefined) {
+//       return res.status(400).json({ 
+//         message: "Missing required fields: loanId, day, isPaid" 
+//       });
+//     }
 
-    const loan = await Loan.findById(loanId);
-    if (!loan) {
-      return res.status(404).json({ 
-        message: "Loan not found" 
-      });
-    }
+//     const loan = await Loan.findById(loanId);
+//     if (!loan) {
+//       return res.status(404).json({ 
+//         message: "Loan not found" 
+//       });
+//     }
 
-    const repayment = loan.repayments.find(r => r.day === day);
-    if (!repayment) {
-      return res.status(404).json({ 
-        message: "Repayment day not found" 
-      });
-    }
+//     const repayment = loan.repayments.find(r => r.day === day);
+//     if (!repayment) {
+//       return res.status(404).json({ 
+//         message: "Repayment day not found" 
+//       });
+//     }
 
-    if (isPaid) {
-      repayment.isPaid = true;
-      repayment.paidAmount = repayment.dueAmount;
+//     if (isPaid) {
+//       repayment.isPaid = true;
+//       repayment.paidAmount = repayment.dueAmount;
       
-      // Check if all payments are completed
-      const allPaid = loan.repayments.every(r => r.isPaid);
-      if (allPaid) {
-        loan.status = "completed";
-      }
-    } else {
-      repayment.isPaid = false;
-      // Apply 20% penalty to unpaid amount
-      const penalty = repayment.dueAmount * 0.2;
-      repayment.dueAmount += penalty;
+//       // Check if all payments are completed
+//       const allPaid = loan.repayments.every(r => r.isPaid);
+//       if (allPaid) {
+//         loan.status = "completed";
+//       }
+//     } else {
+//       repayment.isPaid = false;
+//       // Apply 20% penalty to unpaid amount
+//       const penalty = repayment.dueAmount * 0.2;
+//       repayment.dueAmount += penalty;
 
-      // Add unpaid amount to next day's due
-      const nextRepayment = loan.repayments.find(r => r.day === day + 1);
-      if (nextRepayment) {
-        nextRepayment.dueAmount += repayment.dueAmount; 
-      }
-    }
+//       // Add unpaid amount to next day's due
+//       const nextRepayment = loan.repayments.find(r => r.day === day + 1);
+//       if (nextRepayment) {
+//         nextRepayment.dueAmount += repayment.dueAmount; 
+//       }
+//     }
 
-    await loan.save();
-    res.json({ 
-      message: "Repayment updated successfully", 
-      loan 
-    });
-  } catch (error) {
-    console.error("Confirm repayment error:", error);
-    res.status(500).json({ 
-      message: "Error updating repayment", 
-      error: error.message 
-    });
-  }
-};
+//     await loan.save();
+//     res.json({ 
+//       message: "Repayment updated successfully", 
+//       loan 
+//     });
+//   } catch (error) {
+//     console.error("Confirm repayment error:", error);
+//     res.status(500).json({ 
+//       message: "Error updating repayment", 
+//       error: error.message 
+//     });
+//   }
+// };
 
+// Get Remaining Balance with penalties
 const getRemainingBalance = async (req, res) => {
   try {
     const { loanId } = req.params;
+    const loan = await Loan.findById(loanId).populate("user");
 
-    if (!loanId) {
-      return res.status(400).json({ 
-        message: "Loan ID is required" 
+    if (!loan) return res.status(404).json({ message: "Loan not found" });
+
+    const today = new Date();
+    let remainingBalance = 0;
+    let carryForward = 0;
+    const penaltyRate = 0.2; // 20% daily penalty
+    const breakdown = [];
+
+    for (const repayment of loan.repayments) {
+      let due = repayment.dueAmount + carryForward;
+      let paid = repayment.paidAmount || 0;
+      let remaining = due - paid;
+
+      if (remaining > 0 && !repayment.isPaid) {
+        // Apply penalty on remaining
+        const penalty = remaining * penaltyRate;
+        remaining += penalty;
+        carryForward = remaining; // carry forward to next day
+      } else if (remaining <= 0) {
+        // Overpayment reduces next day's due
+        carryForward = remaining; // can be negative
+        remaining = 0;
+      } else {
+        carryForward = 0;
+      }
+
+      remainingBalance += remaining;
+
+      breakdown.push({
+        day: repayment.day,
+        dueAmount: due,
+        paidAmount: paid,
+        penaltyApplied: remaining > 0 ? (due - paid) * penaltyRate : 0,
+        isPaid: repayment.isPaid,
+        carryForward: carryForward,
+        remainingAfterDay: remainingBalance
       });
     }
 
-    const loan = await Loan.findById(loanId);
-    if (!loan) {
-      return res.status(404).json({ 
-        message: "Loan not found" 
-      });
-    }
-
-    // Calculate balance from unpaid repayments
-    const remainingBalance = loan.repayments
-      .filter(r => !r.isPaid) // only unpaid days
-      .reduce((sum, r) => sum + r.dueAmount, 0);
-
-    res.status(200).json({
+    return res.status(200).json({
       loanId: loan._id,
-      remainingBalance: Number(remainingBalance.toFixed(2))
+      borrower: `${loan.user.firstName} ${loan.user.lastName}`,
+      totalRemaining: remainingBalance,
+      breakdown
     });
-
   } catch (error) {
-    console.error("Get remaining balance error:", error);
-    res.status(500).json({ 
-      message: "Error calculating remaining balance", 
-      error: error.message 
-    });
+    console.error("Error calculating remaining balance:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
+
+
 
 // Get all loans (optional: filter by status or user)
 const getLoans = async (req, res) => {
@@ -391,65 +415,63 @@ const getUserLoans = async (req, res) => {
   }
 };
 
-const calculatePenalties = async (req, res) => {
-  try {
-    const { loanId } = req.params;
+// const calculatePenalties = async (req, res) => {
+//   try {
+//     const { loanId } = req.params;
     
-    const loan = await Loan.findById(loanId).populate('user');
-    if (!loan) {
-      return res.status(404).json({ message: "Loan not found" });
-    }
+//     const loan = await Loan.findById(loanId).populate('user');
+//     if (!loan) {
+//       return res.status(404).json({ message: "Loan not found" });
+//     }
 
-    const currentDate = new Date();
-    const penaltyRate = 0.05; // 5% per day penalty rate
-    let totalPenalty = 0;
-    let daysOverdue = 0;
-    const penaltyDetails = [];
+//     const currentDate = new Date();
+//     const penaltyRate = 0.05; // 5% per day penalty rate
+//     let totalPenalty = 0;
+//     let daysOverdue = 0;
+//     const penaltyDetails = [];
 
-    if (loan.repayments && loan.repayments.length > 0) {
-      loan.repayments.forEach((repayment, index) => {
-        if (!repayment.isPaid) {
-          // Calculate days overdue for this payment
-          const dueDate = new Date(loan.createdAt);
-          dueDate.setDate(dueDate.getDate() + repayment.day);
+//     if (loan.repayments && loan.repayments.length > 0) {
+//       loan.repayments.forEach((repayment, index) => {
+//         if (!repayment.isPaid) {
+//           // Calculate days overdue for this payment
+//           const dueDate = new Date(loan.createdAt);
+//           dueDate.setDate(dueDate.getDate() + repayment.day);
           
-          if (currentDate > dueDate) {
-            const daysLate = Math.floor((currentDate - dueDate) / (1000 * 60 * 60 * 24));
-            const penaltyAmount = repayment.dueAmount * (penaltyRate / 100) * daysLate;
+//           if (currentDate > dueDate) {
+//             const daysLate = Math.floor((currentDate - dueDate) / (1000 * 60 * 60 * 24));
+//             const penaltyAmount = repayment.dueAmount * (penaltyRate / 100) * daysLate;
             
-            totalPenalty += penaltyAmount;
-            daysOverdue = Math.max(daysOverdue, daysLate);
+//             totalPenalty += penaltyAmount;
+//             daysOverdue = Math.max(daysOverdue, daysLate);
             
-            penaltyDetails.push({
-              day: repayment.day,
-              dueAmount: repayment.dueAmount,
-              daysLate: daysLate,
-              penalty: penaltyAmount
-            });
-          }
-        }
-      });
-    }
+//             penaltyDetails.push({
+//               day: repayment.day,
+//               dueAmount: repayment.dueAmount,
+//               daysLate: daysLate,
+//               penalty: penaltyAmount
+//             });
+//           }
+//         }
+//       });
+//     }
 
-    res.status(200).json({
-      loanId: loan._id,
-      borrower: `${loan.user.firstName} ${loan.user.lastName}`,
-      totalPenalty: totalPenalty,
-      daysOverdue: daysOverdue,
-      penaltyRate: penaltyRate,
-      details: penaltyDetails
-    });
-  } catch (error) {
-    console.error("Error calculating penalties:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-};
+//     res.status(200).json({
+//       loanId: loan._id,
+//       borrower: `${loan.user.firstName} ${loan.user.lastName}`,
+//       totalPenalty: totalPenalty,
+//       daysOverdue: daysOverdue,
+//       penaltyRate: penaltyRate,
+//       details: penaltyDetails
+//     });
+//   } catch (error) {
+//     console.error("Error calculating penalties:", error);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// };
 
 
 module.exports = { 
   createLoan, 
-  calculatePenalties, 
-  confirmRepayment, 
   getRemainingBalance, 
   getLoans, 
   getLoanById, 
