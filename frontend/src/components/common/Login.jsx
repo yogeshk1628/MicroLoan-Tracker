@@ -32,6 +32,29 @@ const Login = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  // Enhanced email validation
+  const validateEmail = (email) => {
+    if (!email) {
+      return "Email address is required";
+    }
+    const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+    if (!emailRegex.test(email)) {
+      return "Please enter a valid email address";
+    }
+    return true;
+  };
+
+  // Enhanced password validation
+  const validatePassword = (password) => {
+    if (!password) {
+      return "Password is required";
+    }
+    if (password.length < 6) {
+      return "Password must be at least 6 characters long";
+    }
+    return true;
+  };
+
   const onSubmit = async (data) => {
     try {
       const res = await axios.post("http://localhost:5000/api/auth/login", data);
@@ -48,7 +71,7 @@ const Login = () => {
 
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(decodedToken));
-        toast.success("Logged in successfully");
+        toast.success("Logged in successfully! Welcome back!");
 
         const role = decodedToken.role;
         if (role === "admin") {
@@ -56,21 +79,61 @@ const Login = () => {
         } else if (role === "user") {
           navigate("/dashboard");
         } else {
-          toast.error("Unrecognized role");
+          toast.error("Unrecognized user role");
         }
       } else {
-        toast.error("No token received");
+        toast.error("Authentication failed - no token received");
       }
       
     } catch (error) {
-      // Check if the error is specifically about account being disabled
-      if (error.response?.data?.message?.includes("disabled") || 
-          error.response?.data?.message?.includes("inactive")) {
+      console.error("Login error:", error);
+      
+      // Handle specific error responses
+      if (error.response?.status === 401) {
+        const errorMessage = error.response?.data?.message?.toLowerCase();
+        
+        if (errorMessage?.includes("email") || errorMessage?.includes("user not found") || errorMessage?.includes("not found")) {
+          toast.error("Email address not found. Please check your email or create a new account.");
+        } else if (errorMessage?.includes("password") || errorMessage?.includes("invalid credentials") || errorMessage?.includes("incorrect")) {
+          toast.error("Incorrect password. Please check your password and try again.");
+        } else if (errorMessage?.includes("disabled") || errorMessage?.includes("inactive")) {
+          setAccountDisabled(true);
+          toast.error("Your account has been disabled by the administrator");
+        } else {
+          toast.error("Invalid email or password. Please check your credentials and try again.");
+        }
+      } else if (error.response?.status === 400) {
+        const errorMessage = error.response?.data?.message;
+        if (errorMessage?.includes("email")) {
+          toast.error("Please enter a valid email address");
+        } else if (errorMessage?.includes("password")) {
+          toast.error("Please enter a valid password");
+        } else {
+          toast.error("Please check your login details and try again");
+        }
+      } else if (error.response?.status === 403) {
         setAccountDisabled(true);
         toast.error("Your account has been disabled by the administrator");
+      } else if (error.response?.status === 429) {
+        toast.error("Too many login attempts. Please try again later.");
+      } else if (error.response?.status >= 500) {
+        toast.error("Server error occurred. Please try again later.");
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        toast.error("Network error. Please check your internet connection.");
       } else {
-        toast.error("Login failed");
+        // Generic fallback for any other errors
+        const errorMessage = error.response?.data?.message || "Login failed. Please try again.";
+        toast.error(errorMessage);
       }
+    }
+  };
+
+  // Handle form validation errors with specific toast messages
+  const onError = (errors) => {
+    if (errors.email) {
+      toast.error(errors.email.message);
+    } else if (errors.password) {
+      toast.error(errors.password.message);
     }
   };
 
@@ -103,6 +166,10 @@ const Login = () => {
           sx={{ 
             userSelect: "none",
             textShadow: "0 2px 4px rgba(0,0,0,0.3)",
+            transition: "all 0.3s ease",
+            "&:hover": {
+              transform: "scale(1.05)",
+            }
           }}
         >
           CompanyName
@@ -223,7 +290,7 @@ const Login = () => {
             </Typography>
           </Box>
 
-          <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          <form onSubmit={handleSubmit(onSubmit, onError)} noValidate>
             <Box mb={3}>
               <TextField
                 fullWidth
@@ -231,7 +298,9 @@ const Login = () => {
                 label="Email Address"
                 variant="outlined"
                 disabled={accountDisabled}
-                {...register("email", { required: "Email is required" })}
+                {...register("email", {
+                  validate: validateEmail
+                })}
                 error={!!errors.email}
                 helperText={errors.email?.message}
                 sx={{
@@ -255,7 +324,9 @@ const Login = () => {
                 label="Password"
                 variant="outlined"
                 disabled={accountDisabled}
-                {...register("password", { required: "Password is required" })}
+                {...register("password", {
+                  validate: validatePassword
+                })}
                 error={!!errors.password}
                 helperText={errors.password?.message}
                 sx={{

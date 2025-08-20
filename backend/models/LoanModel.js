@@ -1,12 +1,5 @@
 const mongoose = require("mongoose");
 
-const repaymentSchema = new mongoose.Schema({
-  day: Number, // day number in term (1 to 60)
-  dueAmount: { type: Number, default: 100 }, // default daily repayment
-  paidAmount: { type: Number, default: 0 },
-  isPaid: { type: Boolean, default: false },
-  date: { type: Date }
-});
 
 const loanSchema = new mongoose.Schema(
   {
@@ -36,7 +29,16 @@ const loanSchema = new mongoose.Schema(
       enum: ["pending", "approved", "rejected", "active", "completed"],
       default: "pending"
     },
-    repayments: [repaymentSchema]
+    repayments: [{
+    day: { type: Number, required: true },
+    dueAmount: { type: Number, required: true, default: 100 },
+    paidAmount: { type: Number, default: 0 },
+    isPaid: { type: Boolean, default: false },
+    penaltyAmount: { type: Number, default: 0 }, // Store penalty for this day
+    createdAt: { type: Date, default: Date.now }
+  }],
+  totalPenalties: { type: Number, default: 0 },
+    
   },
   { timestamps: true }
 );

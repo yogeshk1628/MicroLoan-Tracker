@@ -1,16 +1,93 @@
 const Loan = require("../models/LoanModel");
 
+/**
+ * Rounds to 2 decimals reliably.
+ */
+function round2(n) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Core balance calculator.
+ *
+ * Rules implemented:
+ * - Base due per day is loan.dailyPayment (UI's "Due Amount").
+ * - Penalty applies ONLY to the next day and is computed from the previous day's carry.
+ * - penalty(dayN) = penaltyRate * carry(dayN-1).
+ * - totalDue(dayN) = base + carry(dayN-1) + penalty(dayN).
+ * - carry(dayN) = max(0, totalDue(dayN) - paid(dayN)).
+ * - isPaid(dayN) is true if paid(dayN) >= totalDue(dayN) AT EVALUATION TIME.
+ *
+ * This calculator uses existing recorded payments per day. It does not look ahead,
+ * and it does not apply penalties to multiple future days. Each day’s penalty
+ * depends only on the immediate previous day’s carry as of current persisted payments.
+ */
+function calculateSchedule(loan, opts = {}) {
+  const penaltyRate = opts.penaltyRate ?? 0.2;
+  const base = loan.dailyPayment || 100;
+
+  const repayments = loan.repayments || [];
+  let breakdown = [];
+  let totalPenalties = 0;
+  let totalRemaining = 0;
+
+  // carry from previous day (day-1)
+  let prevCarry = 0;
+
+  for (let i = 0; i < repayments.length; i++) {
+    const r = repayments[i];
+    const paid = r.paidAmount || 0;
+
+    // Penalty is applied on the PREVIOUS day's carry only
+    const penaltyApplied = round2(prevCarry > 0 ? prevCarry * penaltyRate : 0);
+
+    // Today's total due = base + yesterday's carry + penalty on that carry
+    const totalDueForDay = round2(base + prevCarry + penaltyApplied);
+
+    // Unpaid (carry to next day) is what's left of today's total due after today's paid
+    const unpaidAmount = round2(Math.max(0, totalDueForDay - paid));
+
+    // Mark paid only if today's total due is fully covered
+    const isPaid = paid >= totalDueForDay;
+
+    breakdown.push({
+      day: r.day,
+      dueAmount: base,                       // Display column: "Due Amount"
+      penaltyApplied,                        // Display column: "Penalty Applied"
+      carryForwardFromPrevious: prevCarry,   // For debugging/inspection
+      totalDueForDay,                        // Derived
+      paidAmount: paid,                      // Display column: "Paid Amount"
+      unpaidAmount,                          // For remaining and next day carry
+      carryForward: unpaidAmount,            // Display column: "Carry Forward"
+      isPaid                                  // Status
+    });
+
+    totalPenalties = round2(totalPenalties + penaltyApplied);
+    totalRemaining = round2(totalRemaining + unpaidAmount);
+
+    // Set carry for next iteration/day
+    prevCarry = unpaidAmount;
+  }
+
+  return {
+    loanId: loan._id,
+    borrower: loan.user ? `${loan.user.firstName} ${loan.user.lastName}` : undefined,
+    totalRemaining,
+    totalPenalties,
+    breakdown
+  };
+}
+
+/**
+ * Creates a new loan with default schedule.
+ */
 const createLoan = async (req, res) => {
   try {
-    // Get the authenticated user's id and role
     const authenticatedUserId = req.user?.id;
     const role = req.user?.role;
-
-    // Allow admin to specify userId in request, otherwise use their own id
     const requestedUserId = req.body.userId;
     const userId = role === "admin" && requestedUserId ? requestedUserId : authenticatedUserId;
 
-    // Validate user ID
     if (!userId) {
       return res.status(401).json({
         message: "User authentication failed",
@@ -18,10 +95,9 @@ const createLoan = async (req, res) => {
       });
     }
 
-    // Check if target user already has an active or pending loan
-    const existingLoan = await Loan.findOne({ 
-      user: userId, 
-      status: { $in: ['pending', 'active'] } 
+    const existingLoan = await Loan.findOne({
+      user: userId,
+      status: { $in: ["pending", "active"] }
     });
 
     if (existingLoan) {
@@ -31,22 +107,18 @@ const createLoan = async (req, res) => {
       });
     }
 
-    // Use terms provided in request, fallback to defaults if missing
-    const loanAmount = req.body.loanAmount || 5000;
-    const termDays = req.body.termDays || 60;
-    const dailyPayment = req.body.dailyPayment || 100;
-    const interestRate = req.body.interestRate || 20;
+    const loanAmount = req.body.loanAmount ?? 5000;
+    const termDays = req.body.termDays ?? 60;
+    const dailyPayment = req.body.dailyPayment ?? 100;
+    const interestRate = req.body.interestRate ?? 20;
 
-    // Create repayment schedule
-    let repayments = [];
-    for (let day = 1; day <= termDays; day++) {
-      repayments.push({
-        day,
-        dueAmount: dailyPayment,
-        paidAmount: 0,
-        isPaid: false
-      });
-    }
+    const repayments = Array.from({ length: termDays }, (_, idx) => ({
+      day: idx + 1,
+      dueAmount: dailyPayment,  // base shown on UI
+      paidAmount: 0,
+      isPaid: false,
+      penaltyAmount: 0          // stored for transparency after recompute
+    }));
 
     const newLoan = new Loan({
       user: userId,
@@ -55,7 +127,8 @@ const createLoan = async (req, res) => {
       termDays,
       dailyPayment,
       status: "pending",
-      repayments
+      repayments,
+      totalPenalties: 0
     });
 
     await newLoan.save();
@@ -65,7 +138,6 @@ const createLoan = async (req, res) => {
       loan: newLoan
     });
   } catch (error) {
-    console.error("Create loan error:", error);
     res.status(500).json({
       message: "Error creating loan",
       error: error.message || "Internal server error"
@@ -73,266 +145,187 @@ const createLoan = async (req, res) => {
   }
 };
 
-
-const DAILY_PAYMENT = 100;
-const PENALTY_RATE = 0.2; // 20% per day on missed amount
-
-/*const calculatePenalties = async (req, res) => {
+/**
+ * Processes a payment for a specific day.
+ *
+ * Requirements satisfied:
+ * - Only the next day's penalty is affected (because penalty depends on previous day's carry).
+ * - When a payment is recorded for a day, we recompute the whole schedule and mark that day
+ *   as Paid if and only if its total due is fully covered by its paidAmount at that time.
+ * - We DO NOT distribute overpayment to future days automatically by default.
+ *   If you want to roll over overpayment to future days, uncomment the "rollover" section.
+ */
+const processPayment = async (req, res) => {
   try {
     const { loanId } = req.params;
-    
-    if (!loanId) {
-      return res.status(400).json({ 
-        message: "Loan ID is required" 
-      });
+    const { day, amount } = req.body;
+
+    if (!day || !amount || amount <= 0) {
+      return res.status(400).json({ message: "Valid day and amount are required" });
     }
 
-    const loan = await Loan.findById(loanId);
-
-    if (!loan) {
-      return res.status(404).json({ 
-        message: "Loan not found" 
-      });
-    }
-
-    const startDate = new Date(loan.createdAt); // when loan was created
-    const today = new Date();
-
-    let balance = 0;
-    let missedPayments = []; // store { day, amountMissed }
-
-    const totalDays = Math.min(
-      Math.ceil((today - startDate) / (1000 * 60 * 60 * 24)),
-      loan.termDays || 60 // default 60 days
-    );
-
-    for (let day = 1; day <= totalDays; day++) {
-      // Add today's scheduled payment
-      let todayPayment = DAILY_PAYMENT;
-
-      // Check penalties from previous missed payments
-      missedPayments = missedPayments.map(missed => {
-        missed.amountMissed += missed.amountMissed * PENALTY_RATE; // apply penalty
-        return missed;
-      });
-
-      // Add today's payment to missedPayments (assuming missed)
-      missedPayments.push({ day, amountMissed: todayPayment });
-
-      // Sum all missed amounts
-      balance = missedPayments.reduce((sum, mp) => sum + mp.amountMissed, 0);
-    }
-
-    res.json({
-      loanId,
-      totalDays,
-      remainingBalance: Number(balance.toFixed(2)),
-      missedPayments: missedPayments.map(mp => ({
-        day: mp.day,
-        amount: Number(mp.amountMissed.toFixed(2)),
-      })),
-    });
-  } catch (error) {
-    console.error("Calculate penalties error:", error);
-    res.status(500).json({ 
-      message: "Error calculating penalties", 
-      error: error.message 
-    });
-  }
-};*/
-
-// const confirmRepayment = async (req, res) => {
-//   try {
-//     const { loanId, day, isPaid } = req.body;
-
-//     // Validate input
-//     if (!loanId || day === undefined || isPaid === undefined) {
-//       return res.status(400).json({ 
-//         message: "Missing required fields: loanId, day, isPaid" 
-//       });
-//     }
-
-//     const loan = await Loan.findById(loanId);
-//     if (!loan) {
-//       return res.status(404).json({ 
-//         message: "Loan not found" 
-//       });
-//     }
-
-//     const repayment = loan.repayments.find(r => r.day === day);
-//     if (!repayment) {
-//       return res.status(404).json({ 
-//         message: "Repayment day not found" 
-//       });
-//     }
-
-//     if (isPaid) {
-//       repayment.isPaid = true;
-//       repayment.paidAmount = repayment.dueAmount;
-      
-//       // Check if all payments are completed
-//       const allPaid = loan.repayments.every(r => r.isPaid);
-//       if (allPaid) {
-//         loan.status = "completed";
-//       }
-//     } else {
-//       repayment.isPaid = false;
-//       // Apply 20% penalty to unpaid amount
-//       const penalty = repayment.dueAmount * 0.2;
-//       repayment.dueAmount += penalty;
-
-//       // Add unpaid amount to next day's due
-//       const nextRepayment = loan.repayments.find(r => r.day === day + 1);
-//       if (nextRepayment) {
-//         nextRepayment.dueAmount += repayment.dueAmount; 
-//       }
-//     }
-
-//     await loan.save();
-//     res.json({ 
-//       message: "Repayment updated successfully", 
-//       loan 
-//     });
-//   } catch (error) {
-//     console.error("Confirm repayment error:", error);
-//     res.status(500).json({ 
-//       message: "Error updating repayment", 
-//       error: error.message 
-//     });
-//   }
-// };
-
-// Get Remaining Balance with penalties
-const getRemainingBalance = async (req, res) => {
-  try {
-    const { loanId } = req.params;
     const loan = await Loan.findById(loanId).populate("user");
-
     if (!loan) return res.status(404).json({ message: "Loan not found" });
 
-    const today = new Date();
-    let remainingBalance = 0;
-    let carryForward = 0;
-    const penaltyRate = 0.2; // 20% daily penalty
-    const breakdown = [];
-
-    for (const repayment of loan.repayments) {
-      let due = repayment.dueAmount + carryForward;
-      let paid = repayment.paidAmount || 0;
-      let remaining = due - paid;
-
-      if (remaining > 0 && !repayment.isPaid) {
-        // Apply penalty on remaining
-        const penalty = remaining * penaltyRate;
-        remaining += penalty;
-        carryForward = remaining; // carry forward to next day
-      } else if (remaining <= 0) {
-        // Overpayment reduces next day's due
-        carryForward = remaining; // can be negative
-        remaining = 0;
-      } else {
-        carryForward = 0;
-      }
-
-      remainingBalance += remaining;
-
-      breakdown.push({
-        day: repayment.day,
-        dueAmount: due,
-        paidAmount: paid,
-        penaltyApplied: remaining > 0 ? (due - paid) * penaltyRate : 0,
-        isPaid: repayment.isPaid,
-        carryForward: carryForward,
-        remainingAfterDay: remainingBalance
-      });
+    const idx = loan.repayments.findIndex(r => r.day === Number(day));
+    if (idx === -1) {
+      return res.status(404).json({ message: "Repayment day not found" });
     }
 
+    // Increment local paid amount
+    const prevPaid = loan.repayments[idx].paidAmount || 0;
+    let newPaid = round2(prevPaid + amount);
+
+    // Optional: roll over overpayment to subsequent days
+    // Uncomment this block if overpayments should reduce future carries automatically.
+    /*
+    const snapshotForRollover = calculateSchedule({
+      ...loan.toObject(),
+      repayments: loan.repayments.map(r => ({ ...r }))
+    });
+    const todayBreak = snapshotForRollover.breakdown.find(b => b.day === Number(day));
+    if (todayBreak) {
+      const overpay = round2(Math.max(0, newPaid - todayBreak.totalDueForDay));
+      if (overpay > 0) {
+        newPaid = todayBreak.totalDueForDay; // cap today's paid at today's due
+        // push overpay into next days sequentially
+        for (let j = idx + 1, left = overpay; j < loan.repayments.length && left > 0; j++) {
+          const tempLoan = {
+            ...loan.toObject(),
+            repayments: loan.repayments.map((r, k) =>
+              k === idx ? { ...r, paidAmount: newPaid } : { ...r }
+            )
+          };
+          const sched = calculateSchedule(tempLoan);
+          const nextBreak = sched.breakdown.find(b => b.day === loan.repayments[j].day);
+          if (!nextBreak) break;
+          const dueNext = nextBreak.totalDueForDay;
+          const alreadyPaidNext = loan.repayments[j].paidAmount || 0;
+          const needed = round2(Math.max(0, dueNext - alreadyPaidNext));
+          const payNow = Math.min(left, needed);
+          loan.repayments[j].paidAmount = round2(alreadyPaidNext + payNow);
+          left = round2(left - payNow);
+        }
+      }
+    }
+    */
+
+    loan.repayments[idx].paidAmount = newPaid;
+    loan.repayments[idx].paymentDate = new Date();
+
+    // Recompute schedule after this transaction
+    const balance = calculateSchedule(loan);
+
+    // Sync penalty & isPaid flags back to loan
+    for (const b of balance.breakdown) {
+      const rIdx = loan.repayments.findIndex(r => r.day === b.day);
+      if (rIdx >= 0) {
+        loan.repayments[rIdx].penaltyAmount = b.penaltyApplied;
+        loan.repayments[rIdx].isPaid = b.isPaid;
+      }
+    }
+    loan.totalPenalties = balance.totalPenalties;
+
+    await loan.save();
+
     return res.status(200).json({
-      loanId: loan._id,
-      borrower: `${loan.user.firstName} ${loan.user.lastName}`,
-      totalRemaining: remainingBalance,
-      breakdown
+      message: "Payment processed successfully",
+      repayment: loan.repayments[idx],
+      updatedBalance: balance
     });
   } catch (error) {
-    console.error("Error calculating remaining balance:", error);
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
+/**
+ * Returns remaining balance snapshot and persists penalty fields on the loan
+ * so UI can display "Penalty Applied" and "Carry Forward" per day.
+ */
+const getRemainingBalance = async (req, res) => {
+  try {
+    const { loanId } = req.params;
+    const loan = await Loan.findById(loanId).populate("user");
+    if (!loan) return res.status(404).json({ message: "Loan not found" });
 
+    const balance = calculateSchedule(loan);
 
+    for (const b of balance.breakdown) {
+      const idx = loan.repayments.findIndex(r => r.day === b.day);
+      if (idx >= 0) {
+        loan.repayments[idx].penaltyAmount = b.penaltyApplied;
+        loan.repayments[idx].isPaid = b.isPaid;
+      }
+    }
+    loan.totalPenalties = balance.totalPenalties;
 
-// Get all loans (optional: filter by status or user)
+    await loan.save();
+
+    return res.status(200).json(balance);
+  } catch (error) {
+    res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+const getLoanById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ message: "Loan ID is required" });
+
+    const loan = await Loan.findById(id).populate("user", "firstName lastName email");
+    if (!loan) return res.status(404).json({ message: "Loan not found" });
+
+    if (req.user.role !== "admin" && loan.user._id.toString() !== req.user.id) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Recompute (non-persistent here unless you want to persist as well)
+    const balance = calculateSchedule(loan);
+    for (const b of balance.breakdown) {
+      const idx = loan.repayments.findIndex(r => r.day === b.day);
+      if (idx >= 0) {
+        loan.repayments[idx].penaltyAmount = b.penaltyApplied;
+        loan.repayments[idx].isPaid = b.isPaid;
+      }
+    }
+    loan.totalPenalties = balance.totalPenalties;
+
+    res.status(200).json(loan);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching loan", error: error.message });
+  }
+};
+
 const getLoans = async (req, res) => {
   try {
     const { status, userId } = req.query;
-    let filter = {};
-
+    const filter = {};
     if (status) filter.status = status;
     if (userId) filter.user = userId;
 
     const loans = await Loan.find(filter).populate("user", "firstName lastName email");
-    res.status(200).json(loans);
-  } catch (error) {
-    console.error("Get loans error:", error);
-    res.status(500).json({ 
-      message: "Error fetching loans", 
-      error: error.message 
+
+    // Optionally recompute for each (without saving to DB here to keep it light)
+    const result = loans.map(loan => {
+      const balance = calculateSchedule(loan);
+      return {
+        ...loan.toObject(),
+        computed: balance
+      };
     });
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching loans", error: error.message });
   }
 };
 
-// Get single loan by ID
-const getLoanById = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({ 
-        message: "Loan ID is required" 
-      });
-    }
-
-    const loan = await Loan.findById(id).populate("user", "firstName lastName email");
-    if (!loan) {
-      return res.status(404).json({ 
-        message: "Loan not found" 
-      });
-    }
-
-    // Check if user has permission to view this loan
-    if (req.user.role !== 'admin' && loan.user._id.toString() !== req.user.id) {
-      return res.status(403).json({ 
-        message: "Access denied" 
-      });
-    }
-
-    res.status(200).json(loan);
-  } catch (error) {
-    console.error("Get loan by ID error:", error);
-    res.status(500).json({ 
-      message: "Error fetching loan", 
-      error: error.message 
-    });
-  }
-};
-
-// Update loan details (admin only)
 const updateLoan = async (req, res) => {
   try {
     const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({ 
-        message: "Loan ID is required" 
-      });
-    }
-
-    // Only admin can update loan details
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ 
-        message: "Access denied. Admin role required." 
-      });
+    if (!id) return res.status(400).json({ message: "Loan ID is required" });
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin role required." });
     }
 
     const updatedLoan = await Loan.findByIdAndUpdate(id, req.body, {
@@ -340,142 +333,59 @@ const updateLoan = async (req, res) => {
       runValidators: true
     });
 
-    if (!updatedLoan) {
-      return res.status(404).json({ 
-        message: "Loan not found" 
-      });
-    }
+    if (!updatedLoan) return res.status(404).json({ message: "Loan not found" });
 
-    res.status(200).json({ 
-      message: "Loan updated successfully", 
-      loan: updatedLoan 
+    res.status(200).json({
+      message: "Loan updated successfully",
+      loan: updatedLoan
     });
   } catch (error) {
-    console.error("Update loan error:", error);
-    res.status(500).json({ 
-      message: "Error updating loan", 
-      error: error.message 
-    });
+    res.status(500).json({ message: "Error updating loan", error: error.message });
   }
 };
 
-// Delete a loan (admin only)
 const deleteLoan = async (req, res) => {
   try {
     const { id } = req.params;
-
-    if (!id) {
-      return res.status(400).json({ 
-        message: "Loan ID is required" 
-      });
-    }
-
-    // Only admin can delete loans
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ 
-        message: "Access denied. Admin role required." 
-      });
+    if (!id) return res.status(400).json({ message: "Loan ID is required" });
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin role required." });
     }
 
     const deletedLoan = await Loan.findByIdAndDelete(id);
-    if (!deletedLoan) {
-      return res.status(404).json({ 
-        message: "Loan not found" 
-      });
-    }
+    if (!deletedLoan) return res.status(404).json({ message: "Loan not found" });
 
-    res.status(200).json({ 
-      message: "Loan deleted successfully" 
-    });
+    res.status(200).json({ message: "Loan deleted successfully" });
   } catch (error) {
-    console.error("Delete loan error:", error);
-    res.status(500).json({ 
-      message: "Error deleting loan", 
-      error: error.message 
-    });
+    res.status(500).json({ message: "Error deleting loan", error: error.message });
   }
 };
 
 const getUserLoans = async (req, res) => {
   try {
-    console.log("Getting loans for user:", req.user.id);
-    
-    // Get loans for the authenticated user only
     const loans = await Loan.find({ user: req.user.id }).populate("user", "firstName lastName email");
-    
-    console.log("Found loans:", loans.length);
-    
-    res.status(200).json(loans);
-  } catch (error) {
-    console.error("Get user loans error:", error);
-    res.status(500).json({ 
-      message: "Error fetching user loans", 
-      error: error.message 
+
+    const result = loans.map(loan => {
+      const balance = calculateSchedule(loan);
+      return {
+        ...loan.toObject(),
+        computed: balance
+      };
     });
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching user loans", error: error.message });
   }
 };
 
-// const calculatePenalties = async (req, res) => {
-//   try {
-//     const { loanId } = req.params;
-    
-//     const loan = await Loan.findById(loanId).populate('user');
-//     if (!loan) {
-//       return res.status(404).json({ message: "Loan not found" });
-//     }
-
-//     const currentDate = new Date();
-//     const penaltyRate = 0.05; // 5% per day penalty rate
-//     let totalPenalty = 0;
-//     let daysOverdue = 0;
-//     const penaltyDetails = [];
-
-//     if (loan.repayments && loan.repayments.length > 0) {
-//       loan.repayments.forEach((repayment, index) => {
-//         if (!repayment.isPaid) {
-//           // Calculate days overdue for this payment
-//           const dueDate = new Date(loan.createdAt);
-//           dueDate.setDate(dueDate.getDate() + repayment.day);
-          
-//           if (currentDate > dueDate) {
-//             const daysLate = Math.floor((currentDate - dueDate) / (1000 * 60 * 60 * 24));
-//             const penaltyAmount = repayment.dueAmount * (penaltyRate / 100) * daysLate;
-            
-//             totalPenalty += penaltyAmount;
-//             daysOverdue = Math.max(daysOverdue, daysLate);
-            
-//             penaltyDetails.push({
-//               day: repayment.day,
-//               dueAmount: repayment.dueAmount,
-//               daysLate: daysLate,
-//               penalty: penaltyAmount
-//             });
-//           }
-//         }
-//       });
-//     }
-
-//     res.status(200).json({
-//       loanId: loan._id,
-//       borrower: `${loan.user.firstName} ${loan.user.lastName}`,
-//       totalPenalty: totalPenalty,
-//       daysOverdue: daysOverdue,
-//       penaltyRate: penaltyRate,
-//       details: penaltyDetails
-//     });
-//   } catch (error) {
-//     console.error("Error calculating penalties:", error);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-
-
-module.exports = { 
-  createLoan, 
-  getRemainingBalance, 
-  getLoans, 
-  getLoanById, 
-  updateLoan, 
+module.exports = {
+  createLoan,
+  getRemainingBalance,
+  getLoans,
+  getLoanById,
+  updateLoan,
   deleteLoan,
-  getUserLoans
+  getUserLoans,
+  processPayment
 };

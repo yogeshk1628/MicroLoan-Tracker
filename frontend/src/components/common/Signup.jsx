@@ -32,6 +32,53 @@ const Signup = () => {
   // Watch all form fields for validation
   const watchedFields = watch();
 
+  // Enhanced password validation function
+  const validatePassword = (password) => {
+    if (!password) {
+      return "Password is required";
+    }
+    if (password.length < 8) {
+      return "Password must be at least 8 characters long";
+    }
+    if (!/(?=.*[a-z])/.test(password)) {
+      return "Password must contain at least one lowercase letter";
+    }
+    if (!/(?=.*[A-Z])/.test(password)) {
+      return "Password must contain at least one uppercase letter";
+    }
+    if (!/(?=.*\d)/.test(password)) {
+      return "Password must contain at least one number";
+    }
+    if (!/(?=.*[@$!%*?&])/.test(password)) {
+      return "Password must contain at least one special character (@$!%*?&)";
+    }
+    return true;
+  };
+
+  // Enhanced email validation
+  const validateEmail = (email) => {
+    if (!email) {
+      return "Email address is required";
+    }
+    const emailRegex = /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i;
+    if (!emailRegex.test(email)) {
+      return "Please enter a valid email address";
+    }
+    return true;
+  };
+
+  // Enhanced phone validation
+  const validatePhone = (phone) => {
+    if (!phone) {
+      return "Contact number is required";
+    }
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phoneRegex.test(phone)) {
+      return "Please enter a valid 10-digit contact number";
+    }
+    return true;
+  };
+
   const onSubmit = async (data) => {
     setIsLoading(true);
     
@@ -55,28 +102,20 @@ const Signup = () => {
     }
   };
 
-  // Enhanced validation with custom messages
+  // Enhanced validation with custom messages and toast notifications
   const handleFormErrors = (errors) => {
     if (errors.firstName) {
       showWarningToast("Please enter your first name");
     } else if (errors.lastName) {
       showWarningToast("Please enter your last name");
     } else if (errors.email) {
-      if (errors.email.type === 'required') {
-        showWarningToast("Email address is required");
-      } else if (errors.email.type === 'pattern') {
-        showWarningToast("Please enter a valid email address");
-      }
+      showWarningToast(errors.email.message);
     } else if (errors.password) {
-      if (errors.password.type === 'required') {
-        showWarningToast("Password is required");
-      } else if (errors.password.type === 'minLength') {
-        showWarningToast("Password must be at least 8 characters long");
-      }
+      showWarningToast(errors.password.message);
     } else if (errors.gender) {
       showWarningToast("Please select your gender");
     } else if (errors.contactNumber) {
-      showWarningToast("Contact number is required");
+      showWarningToast(errors.contactNumber.message);
     }
   };
 
@@ -188,7 +227,17 @@ const Signup = () => {
                 label="First Name"
                 fullWidth
                 variant="outlined"
-                {...register("firstName", { required: "First name is required" })}
+                {...register("firstName", { 
+                  required: "First name is required",
+                  minLength: {
+                    value: 2,
+                    message: "First name must be at least 2 characters"
+                  },
+                  pattern: {
+                    value: /^[A-Za-z]+$/,
+                    message: "First name should contain only letters"
+                  }
+                })}
                 error={!!errors.firstName}
                 helperText={errors.firstName?.message}
                 sx={{
@@ -207,7 +256,17 @@ const Signup = () => {
                 label="Last Name"
                 fullWidth
                 variant="outlined"
-                {...register("lastName", { required: "Last name is required" })}
+                {...register("lastName", { 
+                  required: "Last name is required",
+                  minLength: {
+                    value: 2,
+                    message: "Last name must be at least 2 characters"
+                  },
+                  pattern: {
+                    value: /^[A-Za-z]+$/,
+                    message: "Last name should contain only letters"
+                  }
+                })}
                 error={!!errors.lastName}
                 helperText={errors.lastName?.message}
                 sx={{
@@ -232,11 +291,7 @@ const Signup = () => {
                 fullWidth
                 variant="outlined"
                 {...register("email", {
-                  required: "Email is required",
-                  pattern: {
-                    value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                    message: "Invalid email address",
-                  },
+                  validate: validateEmail
                 })}
                 error={!!errors.email}
                 helperText={errors.email?.message}
@@ -257,13 +312,12 @@ const Signup = () => {
             {/* Password */}
             <Box mb={2}>
               <TextField
-                label="Password"
+                label="Password (8+ uppercase, lowercase, number, and special character)"
                 type={showPassword ? "text" : "password"}
                 fullWidth
                 variant="outlined"
                 {...register("password", {
-                  required: "Password is required",
-                  minLength: { value: 8, message: "Minimum 8 characters required" },
+                  validate: validatePassword
                 })}
                 error={!!errors.password}
                 helperText={errors.password?.message}
@@ -291,6 +345,19 @@ const Signup = () => {
                   ),
                 }}
               />
+              {/* Password Requirements */}
+              <Typography
+                variant="caption"
+                color="textSecondary"
+                sx={{
+                  display: "block",
+                  mt: 0.5,
+                  fontSize: "0.75rem",
+                  lineHeight: 1.4,
+                  color: "#666",
+                }}
+              >
+              </Typography>
             </Box>
 
             {/* Gender */}
@@ -330,12 +397,8 @@ const Signup = () => {
                 type="tel"
                 fullWidth
                 variant="outlined"
-                {...register("contactNumber", { 
-                  required: "Contact number is required",
-                  pattern: {
-                    value: /^[0-9]{10}$/,
-                    message: "Please enter a valid 10-digit contact number"
-                  }
+                {...register("contactNumber", {
+                  validate: validatePhone
                 })}
                 error={!!errors.contactNumber}
                 helperText={errors.contactNumber?.message}

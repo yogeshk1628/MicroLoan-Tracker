@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Box,
   CssBaseline,
@@ -26,14 +26,10 @@ import {
   Tooltip,
   Tabs,
   Tab,
-  LinearProgress,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Switch,
-  FormControlLabel,
-  Stack,
   useTheme
 } from "@mui/material";
 import {
@@ -44,12 +40,9 @@ import {
   AttachMoney,
   ReceiptLong,
   MonetizationOn,
-  Calculate,
   Edit,
   TaskAlt,
   Update,
-  ToggleOff,
-  ToggleOn,
   CheckCircle,
   Delete as DeleteIcon
 } from "@mui/icons-material";
@@ -64,14 +57,23 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
   const [selectedLoan, setSelectedLoan] = useState(null);
   const [openPaymentHistory, setOpenPaymentHistory] = useState(false);
   const [openAssignLoan, setOpenAssignLoan] = useState(false);
-  const [openPenaltyCalculator, setOpenPenaltyCalculator] = useState(false);
   const [openUpdateLoan, setOpenUpdateLoan] = useState(false);
   const [openDeleteConfirm, setOpenDeleteConfirm] = useState(false);
   const [openDeleteLoanConfirm, setOpenDeleteLoanConfirm] = useState(false);
   const [tabValue, setTabValue] = useState(0);
-  const [penaltyData, setPenaltyData] = useState({});
 
   const API_BASE_URL = 'http://localhost:5000';
+
+  // Utility function to format amounts
+  const formatAmount = (amount) => {
+    if (amount === null || amount === undefined) return "₹0.00";
+    try {
+      const value = Number(amount);
+      return `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } catch {
+      return "₹0.00";
+    }
+  };
 
   useEffect(() => {
     fetchAllUsers();
@@ -163,42 +165,6 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
     }
   };
 
-  const handleConfirmRepayment = async (loanId, day, paidAmount) => {
-  try {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}/repay`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ day, paidAmount }),  // ✅ send exact paid amount
-    });
-
-    if (!res.ok) throw new Error("Failed to record repayment");
-
-    showToast?.("Repayment recorded successfully", "success");
-
-    // Refresh loan data
-    const loanRes = await fetch(`${API_BASE_URL}/api/loans/${loanId}`, {
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (loanRes.ok) {
-      const loanData = await loanRes.json();
-      setSelectedLoan(loanData);
-    }
-
-    setOpenPaymentHistory(false);
-    fetchAllLoans();
-  } catch {
-    showToast?.("Failed to record repayment", "error");
-  }
-};
-
-
   const handleUpdateLoanStatus = async (loanId, status) => {
     try {
       const token = localStorage.getItem("token");
@@ -220,30 +186,10 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
     }
   };
 
-  const handleGetRemainingBalance = async (loanId) => {
-  try {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}/remaining-balance`, {
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
-    if (!res.ok) throw new Error("Failed to fetch remaining balance");
-
-    const data = await res.json();
-    setSelectedLoan(data); // store full loan with balance + penalties
-    showToast?.("Remaining balance fetched successfully", "success");
-  } catch {
-    showToast?.("Failed to fetch remaining balance", "error");
-  }
-};
-
-
   const handleDeleteLoan = async (loanId) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/${loanId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}`, {
         method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
@@ -274,18 +220,7 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
               boxShadow: '0 2px 8px rgba(76, 175, 80, 0.3)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              '&::after': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.3) 50%, transparent 70%)',
-                animation: 'shimmer 2s infinite',
-                borderRadius: 6
-              }
+              justifyContent: 'center'
             }}
           >
             <CheckCircle 
@@ -310,12 +245,6 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
           >
             Loan Completed ✓
           </Typography>
-          <style jsx>{`
-            @keyframes shimmer {
-              0% { transform: translateX(-100%); }
-              100% { transform: translateX(200%); }
-            }
-          `}</style>
         </Box>
       );
     }
@@ -346,18 +275,7 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
               width: `${percentage}%`,
               background: `linear-gradient(90deg, ${getProgressColor()}, ${getProgressColor()}dd)`,
               borderRadius: 6,
-              transition: 'width 0.3s ease-in-out',
-              position: 'relative',
-              '&::after': percentage > 10 ? {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.2) 50%, transparent 70%)',
-                animation: 'shimmer 2s infinite'
-              } : {}
+              transition: 'width 0.3s ease-in-out'
             }}
           />
         </Box>
@@ -372,12 +290,6 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
         >
           {value}/{total} payments ({Math.round(percentage)}%)
         </Typography>
-        <style jsx>{`
-          @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(200%); }
-          }
-        `}</style>
       </Box>
     );
   };
@@ -640,104 +552,238 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
     );
   };
 
-  const PaymentHistoryDialog = () => (
-    <Dialog open={openPaymentHistory} onClose={() => setOpenPaymentHistory(false)} maxWidth="md" fullWidth>
-      <DialogTitle sx={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", 
-        color: "white", 
-        py: 2, 
-        px: 3, 
-        borderRadius: "12px 12px 0 0"
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <ReceiptLong sx={{ fontSize: 24 }} />
-          <Box>
-            <Typography variant="h6" fontWeight="bold">
-              Payment History
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.9 }}>
-              {selectedLoan?.user?.firstName} {selectedLoan?.user?.lastName}
-            </Typography>
+  const PaymentHistoryDialog = () => {
+    const [loanDetails, setLoanDetails] = useState(null);
+    const [loadingLoanDetails, setLoadingLoanDetails] = useState(false);
+    const [repaySubmitting, setRepaySubmitting] = useState(false);
+    const [localPaymentInputs, setLocalPaymentInputs] = useState({});
+    const isMountedRef = useRef(false);
+    const loanIdRef = useRef(null);
+
+    const openForLoanId = selectedLoan?._id || null;
+
+    const fetchOnce = async (loanId) => {
+      if (!loanId) return;
+      setLoadingLoanDetails(true);
+      try {
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${API_BASE_URL}/api/loans/${loanId}/remaining-balance`, {
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+        });
+        if (!res.ok) throw new Error("Failed to fetch loan details");
+        const data = await res.json();
+        
+        // NO FRONTEND CALCULATIONS - Just set the data directly from backend
+        setLoanDetails(data);
+      } catch {
+        showToast?.("Failed to fetch loan details", "error");
+        setLoanDetails(null);
+      } finally {
+        setLoadingLoanDetails(false);
+      }
+    };
+
+// Replace the existing handleConfirmRepayment function with this:
+const handleConfirmRepayment = async (loanId, day, paidAmount) => {
+  try {
+    const token = localStorage.getItem("token");
+    
+    // Use the new process-payment endpoint
+    const response = await fetch(`${API_BASE_URL}/api/loans/${loanId}/process-payment`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        day: day,
+        amount: paidAmount
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Failed to process payment");
+    }
+
+    const result = await response.json();
+    showToast?.("Payment recorded successfully", "success");
+    return result;
+  } catch (error) {
+    showToast?.(`Failed to record repayment: ${error.message}`, "error");
+    throw error;
+  }
+};
+
+
+    const openDialog = () => {
+      if (!openForLoanId) return;
+      if (loanIdRef.current === openForLoanId && isMountedRef.current) return;
+      loanIdRef.current = openForLoanId;
+      isMountedRef.current = true;
+      setLocalPaymentInputs({});
+      fetchOnce(openForLoanId);
+    };
+
+    if (openPaymentHistory) openDialog();
+
+    const handleCloseDialog = () => {
+      isMountedRef.current = false;
+      loanIdRef.current = null;
+      setLocalPaymentInputs({});
+      setLoanDetails(null);
+      setOpenPaymentHistory(false);
+    };
+
+    const breakdown = useMemo(() => loanDetails?.breakdown || [], [loanDetails]);
+
+    const handlePaymentSubmit = async (dayData) => {
+      const raw = localPaymentInputs[dayData.day];
+      const amount = raw === "" || raw === undefined ? NaN : parseFloat(raw);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        showToast?.("Please enter a valid payment amount", "error");
+        return;
+      }
+      if (!openForLoanId) return;
+      try {
+        setRepaySubmitting(true);
+        await handleConfirmRepayment(openForLoanId, dayData.day, amount);
+        setLocalPaymentInputs(prev => ({ ...prev, [dayData.day]: "" }));
+        await fetchOnce(openForLoanId);
+        await fetchAllLoans();
+      } finally {
+        setRepaySubmitting(false);
+      }
+    };
+
+    const handleInputChange = (day, value) => {
+      const cleaned = value.replace(/[^\d.]/g, "");
+      setLocalPaymentInputs(prev => ({ ...prev, [day]: cleaned }));
+    };
+
+    return (
+      <Dialog open={openPaymentHistory} onClose={handleCloseDialog} maxWidth="lg" fullWidth keepMounted PaperProps={{ sx: { borderRadius: 4, maxHeight: "90vh", boxShadow: "0 25px 50px rgba(0,0,0,.15)" } }}>
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "linear-gradient(135deg,#667eea 0%,#764ba2 100%)", color: "white", py: 3, px: 4, borderRadius: "16px 16px 0 0", position: "relative", "&::after": { content: '""', position: "absolute", bottom: -8, left: "50%", transform: "translateX(-50%)", width: 0, height: 0, borderLeft: "8px solid transparent", borderRight: "8px solid transparent", borderTop: "8px solid #764ba2" } }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <ReceiptLong sx={{ fontSize: 28 }} />
+            <Box>
+              <Typography variant="h5" fontWeight="bold">Payment Management</Typography>
+              <Typography variant="body2" sx={{ opacity: .9, mt: .5 }}>{selectedLoan?.user?.firstName} {selectedLoan?.user?.lastName} • Loan ID: {selectedLoan?._id?.slice(-6)}</Typography>
+              {loanDetails?.totalRemaining !== undefined && (
+                <Typography variant="body2" sx={{ opacity: .95, mt: .5 }}>
+                  Total Remaining: {formatAmount(loanDetails.totalRemaining)}
+                </Typography>
+              )}
+            </Box>
           </Box>
-        </Box>
-        <IconButton onClick={() => setOpenPaymentHistory(false)} sx={{ color: 'white' }}>
-          <Close />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent sx={{ p: 0 }}>
-        <TableContainer>
-          <Table>
-            <TableHead sx={{ backgroundColor: '#f8f9fa' }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 'bold', py: 2 }}>Day</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', py: 2 }}>Due Amount</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', py: 2 }}>Paid Amount</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', py: 2 }}>Status</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', py: 2 }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {selectedLoan?.repayments?.map((repayment, index) => (
-                <TableRow 
-                  key={index}
-                  sx={{ 
-                    '&:hover': { backgroundColor: '#f5f5f5' },
-                    borderBottom: '1px solid #e0e0e0'
-                  }}
-                >
-                  <TableCell sx={{ py: 2 }}>
-                    <Typography variant="body2" fontWeight="500">
-                      Day {repayment.day}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ py: 2 }}>
-                    <Typography variant="body2" fontWeight="600" color="primary">
-                      ₹{repayment.dueAmount}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ py: 2 }}>
-                    <Typography variant="body2" color={repayment.isPaid ? "success.main" : "text.secondary"}>
-                      ₹{repayment.paidAmount}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ py: 2 }}>
-                    <Chip
-                      label={repayment.isPaid ? "Paid" : "Pending"}
-                      color={repayment.isPaid ? "success" : "warning"}
-                      size="small"
-                      sx={{ fontWeight: 500 }}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ py: 2 }}>
-                    {!repayment.isPaid && (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="primary"
-                        sx={{ 
-                          textTransform: "none",
-                          borderRadius: 2,
-                          px: 2,
-                          boxShadow: '0 2px 8px rgba(25, 118, 210, 0.3)',
-                          '&:hover': {
-                            boxShadow: '0 4px 12px rgba(25, 118, 210, 0.4)'
-                          }
-                        }}
-                        onClick={() => handleConfirmRepayment(selectedLoan._id, repayment.day, true)}
-                      >
-                        Mark Paid
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </DialogContent>
-    </Dialog>
-  );
+          <IconButton onClick={handleCloseDialog} sx={{ color: "white", "&:hover": { backgroundColor: "rgba(255,255,255,.1)", transform: "scale(1.1)" }, transition: "all .2s ease" }}><Close /></IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          {loadingLoanDetails ? (
+            <Box sx={{ p: 4, textAlign: "center" }}>
+              <CircularProgress />
+              <Typography variant="body2" sx={{ mt: 2 }}>Loading payment details...</Typography>
+            </Box>
+          ) : breakdown.length > 0 ? (
+            <TableContainer sx={{ maxHeight: 500 }}>
+              <Table stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: "bold", py: 2, backgroundColor: "#f8f9fa", borderBottom: "2px solid #dee2e6" }}>Day</TableCell>
+                    <TableCell sx={{ fontWeight: "bold", py: 2, backgroundColor: "#f8f9fa", borderBottom: "2px solid #dee2e6" }}>Due Amount</TableCell>
+                    <TableCell sx={{ fontWeight: "bold", py: 2, backgroundColor: "#f8f9fa", borderBottom: "2px solid #dee2e6" }}>Paid Amount</TableCell>
+                    <TableCell sx={{ fontWeight: "bold", py: 2, backgroundColor: "#f8f9fa", borderBottom: "2px solid #dee2e6" }}>Penalty Applied</TableCell>
+                    <TableCell sx={{ fontWeight: "bold", py: 2, backgroundColor: "#f8f9fa", borderBottom: "2px solid #dee2e6" }}>Carry Forward</TableCell>
+                    <TableCell sx={{ fontWeight: "bold", py: 2, backgroundColor: "#f8f9fa", borderBottom: "2px solid #dee2e6" }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: "bold", py: 2, backgroundColor: "#f8f9fa", borderBottom: "2px solid #dee2e6" }}>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {breakdown.map((dayData, index) => (
+                    <TableRow key={`${dayData.day}-${index}`} sx={{ "&:hover": { backgroundColor: "#f8f9ff" }, borderBottom: "1px solid #e0e0e0" }}>
+                      <TableCell sx={{ py: 3 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Box sx={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: dayData.isPaid ? "#4caf50" : "#ff9800" }} />
+                          <Typography variant="body1" fontWeight="600">Day {dayData.day}</Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ py: 3 }}>
+                        <Typography variant="body1" fontWeight="600" color="primary">
+                          {formatAmount(dayData.dueAmount)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ py: 3 }}>
+                        <Typography variant="body1" color={dayData.isPaid ? "success.main" : "text.secondary"} fontWeight={dayData.isPaid ? "600" : "400"}>
+                          {formatAmount(dayData.paidAmount)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ py: 3 }}>
+                        <Typography variant="body1" color="error.main" fontWeight="500">
+                          {formatAmount(dayData.penaltyApplied)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ py: 3 }}>
+                        <Typography variant="body1" color={dayData.carryForward > 0 ? "error.main" : dayData.carryForward < 0 ? "success.main" : "text.secondary"} fontWeight="500">
+                          {formatAmount(dayData.carryForward)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ py: 3 }}>
+                        <Chip label={dayData.isPaid ? "Paid" : "Pending"} color={dayData.isPaid ? "success" : "warning"} size="small" sx={{ fontWeight: 600, borderRadius: 2, px: 1 }} />
+                      </TableCell>
+                      <TableCell sx={{ py: 3 }}>
+                        {!dayData.isPaid && (
+                          <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                            <TextField
+                              size="small"
+                              type="text"
+                              placeholder="Amount"
+                              value={localPaymentInputs[dayData.day] ?? ""}
+                              onChange={(e) => handleInputChange(dayData.day, e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handlePaymentSubmit(dayData);
+                                }
+                              }}
+                              sx={{ width: 120, "& .MuiOutlinedInput-root": { borderRadius: 2, fontSize: ".875rem" } }}
+                              inputMode="decimal"
+                            />
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="primary"
+                              disabled={
+                                repaySubmitting ||
+                                localPaymentInputs[dayData.day] === undefined ||
+                                localPaymentInputs[dayData.day] === "" ||
+                                !Number.isFinite(parseFloat(localPaymentInputs[dayData.day])) ||
+                                parseFloat(localPaymentInputs[dayData.day]) <= 0
+                              }
+                              sx={{ textTransform: "none", borderRadius: 2, px: 2, fontWeight: 600, boxShadow: "0 2px 8px rgba(25,118,210,.3)", "&:hover": { boxShadow: "0 4px 12px rgba(25,118,210,.4)", transform: "translateY(-1px)" }, "&:disabled": { backgroundColor: "#e0e0e0", color: "#999" }, transition: "all .2s ease" }}
+                              onClick={() => handlePaymentSubmit(dayData)}
+                            >
+                              {repaySubmitting ? "Processing..." : "Pay"}
+                            </Button>
+                          </Box>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Box sx={{ p: 4, textAlign: "center" }}>
+              <Typography variant="body1" color="text.secondary">No payment details available</Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 4, py: 3, backgroundColor: "#f8f9fa", borderTop: "1px solid #e0e0e0" }}>
+          <Button onClick={handleCloseDialog} variant="outlined" sx={{ borderRadius: 2, px: 3, py: 1, borderColor: "#ddd", color: "#666", fontWeight: 600, "&:hover": { borderColor: "#bbb", backgroundColor: "rgba(0,0,0,.04)" } }}>Close</Button>
+        </DialogActions>
+      </Dialog>
+    );
+  };
 
   const AssignLoanDialog = () => {
     const [loanAmount, setLoanAmount] = useState(5000);
@@ -750,7 +796,6 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
       }
       try {
         const token = localStorage.getItem("token");
-        console.log("Assigning loan to user:", selectedUser._id, selectedUser.firstName, selectedUser.lastName);
         
         const res = await fetch(`${API_BASE_URL}/api/loans`, {
           method: "POST",
@@ -867,71 +912,6 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
       </Dialog>
     );
   };
-
-  const PenaltyCalculatorDialog = () => (
-    <Dialog open={openPenaltyCalculator} onClose={() => setOpenPenaltyCalculator(false)} maxWidth="md" fullWidth>
-      <DialogTitle sx={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        background: "linear-gradient(135deg, #ff9800, #f57c00)", 
-        color: "white", 
-        py: 2, 
-        px: 3, 
-        borderRadius: "12px 12px 0 0"
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Calculate sx={{ fontSize: 24 }} />
-          <Typography variant="h6" fontWeight="bold">
-            Penalty Calculation Results
-          </Typography>
-        </Box>
-        <IconButton onClick={() => setOpenPenaltyCalculator(false)} sx={{ color: 'white' }}>
-          <Close />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent sx={{ p: 3 }}>
-        <Paper elevation={2} sx={{ p: 3, mb: 3, borderRadius: 2, backgroundColor: '#fff3e0' }}>
-          <Typography variant="h6" gutterBottom color="primary">
-            Penalty Summary
-          </Typography>
-          <Stack spacing={1}>
-            <Typography variant="body1">
-              <strong>Total Penalty Amount:</strong> ₹{penaltyData.totalPenalty?.toLocaleString() || 0}
-            </Typography>
-            <Typography variant="body1">
-              <strong>Days Overdue:</strong> {penaltyData.daysOverdue || 0} days
-            </Typography>
-            <Typography variant="body1">
-              <strong>Penalty Rate:</strong> {penaltyData.penaltyRate || 0}% per day
-            </Typography>
-          </Stack>
-        </Paper>
-        {penaltyData.details && penaltyData.details.length > 0 && (
-          <TableContainer component={Paper} elevation={1}>
-            <Table>
-              <TableHead sx={{ backgroundColor: '#f8f9fa' }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Day</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Due Amount</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Days Late</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>Penalty</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {penaltyData.details.map((detail, index) => (
-                  <TableRow key={index} sx={{ '&:hover': { backgroundColor: '#f5f5f5' } }}>
-                    <TableCell>Day {detail.day}</TableCell>
-                    <TableCell>₹{detail.dueAmount}</TableCell>
-                    <TableCell>{detail.daysLate} days</TableCell>
-                    <TableCell sx={{ color: 'error.main', fontWeight: 'bold' }}>₹{detail.penalty}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
 
   const DeleteConfirmDialog = () => (
     <Dialog open={openDeleteConfirm} onClose={() => setOpenDeleteConfirm(false)}>
@@ -1286,7 +1266,6 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
                                       borderRadius: 2
                                     }}
                                     onClick={() => {
-                                      console.log("Selected user for loan:", user._id, user.firstName, user.lastName);
                                       setSelectedUser(user);
                                       setOpenAssignLoan(true);
                                     }}
@@ -1355,7 +1334,7 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
                           const paidRepayments = loan.repayments?.filter(r => r.isPaid).length || 0;
                           const totalRepayments = loan.repayments?.length || 0;
                           const progress = totalRepayments > 0 ? (paidRepayments / totalRepayments) * 100 : 0;
-                          const isHistoryAndPenaltyDisabled = ['pending', 'approved', 'rejected', 'completed'].includes(loan.status);
+                          const isHistoryDisabled = ['pending', 'approved', 'rejected', 'completed'].includes(loan.status);
                           
                           return (
                             <TableRow 
@@ -1414,16 +1393,16 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
                               </TableCell>
                               <TableCell sx={{ py: 2 }}>
                                 <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                                  <Tooltip title={isHistoryAndPenaltyDisabled ? "Payment history not available for this status" : "Payment History"}>
+                                  <Tooltip title={isHistoryDisabled ? "Payment history not available for this status" : "Payment History"}>
                                     <span>
                                       <IconButton
                                         color="info"
-                                        disabled={isHistoryAndPenaltyDisabled}
+                                        disabled={isHistoryDisabled}
                                         size="small"
                                         sx={{
-                                          backgroundColor: isHistoryAndPenaltyDisabled ? 'grey.300' : 'info.main',
+                                          backgroundColor: isHistoryDisabled ? 'grey.300' : 'info.main',
                                           color: 'white',
-                                          '&:hover': { backgroundColor: isHistoryAndPenaltyDisabled ? 'grey.300' : 'info.dark' },
+                                          '&:hover': { backgroundColor: isHistoryDisabled ? 'grey.300' : 'info.dark' },
                                           borderRadius: 2
                                         }}
                                         onClick={() => {
@@ -1470,24 +1449,6 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
                                       <Edit />
                                     </IconButton>
                                   </Tooltip>
-                                  <Tooltip title={isHistoryAndPenaltyDisabled ? "Penalty calculation not available for this status" : "Calculate Penalties"}>
-                                    <span>
-                                      <IconButton
-                                        color="warning"
-                                        disabled={isHistoryAndPenaltyDisabled}
-                                        size="small"
-                                        sx={{
-                                          backgroundColor: isHistoryAndPenaltyDisabled ? 'grey.300' : 'warning.main',
-                                          color: 'white',
-                                          '&:hover': { backgroundColor: isHistoryAndPenaltyDisabled ? 'grey.300' : 'warning.dark' },
-                                          borderRadius: 2
-                                        }}
-                                        onClick={() => handleGetRemainingBalance(loan._id)}
-                                      >
-                                        <Calculate />
-                                      </IconButton>
-                                    </span>
-                                  </Tooltip>
                                   <Tooltip title="Delete Loan">
                                     <IconButton
                                       color="error"
@@ -1526,7 +1487,6 @@ const AdminDashboard = ({ userProfile, setUserProfile, onLogout, showToast }) =>
       <UpdateLoanDialog />
       <DeleteConfirmDialog />
       <DeleteLoanConfirmDialog />
-      <PenaltyCalculatorDialog />
     </Box>
   );
 };
