@@ -23,7 +23,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton
+  IconButton,
+  InputAdornment
 } from '@mui/material';
 import { useTheme, styled } from '@mui/material/styles';
 import PersonIcon from '@mui/icons-material/Person';
@@ -31,9 +32,12 @@ import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CloseIcon from '@mui/icons-material/Close';
-import AdminNavbar from './AdminNavbar';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import EmailIcon from '@mui/icons-material/Email';
+import LockIcon from '@mui/icons-material/Lock';
+import Navbar from './UserNavbar';
 
-// Custom styled components with white theme
 const StyledCard = styled(Card)(({ theme }) => ({
   background: '#ffffff',
   borderRadius: 24,
@@ -112,7 +116,6 @@ const StyledFormControl = styled(FormControl)(({ theme }) => ({
   },
 }));
 
-// Display Field styled component for read-only view
 const DisplayField = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2),
   borderRadius: 16,
@@ -121,10 +124,28 @@ const DisplayField = styled(Box)(({ theme }) => ({
   minHeight: '20px',
   display: 'flex',
   alignItems: 'center',
+  justifyContent: 'space-between',
   color: '#333',
   fontSize: '1rem',
   fontWeight: 500,
   marginBottom: theme.spacing(2),
+}));
+
+const PasswordDisplayField = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(2),
+  borderRadius: 16,
+  backgroundColor: '#f8f9ff',
+  border: '2px solid #f0f2ff',
+  minHeight: '20px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  color: '#333',
+  fontSize: '1rem',
+  fontWeight: 500,
+  marginBottom: theme.spacing(2),
+  fontFamily: 'monospace',
+  letterSpacing: '2px',
 }));
 
 const FieldLabel = styled(Typography)(({ theme }) => ({
@@ -139,8 +160,8 @@ const StyledDialog = styled(Dialog)(({ theme }) => ({
     borderRadius: 24,
     boxShadow: '0 24px 48px rgba(0, 0, 0, 0.2)',
     border: '1px solid rgba(102, 126, 234, 0.1)',
-    minWidth: 500,
-    maxWidth: 600,
+    minWidth: 600,
+    maxWidth: 700,
     [theme.breakpoints.down('sm')]: {
       margin: theme.spacing(2),
       maxWidth: 'calc(100vw - 32px)',
@@ -149,7 +170,6 @@ const StyledDialog = styled(Dialog)(({ theme }) => ({
   },
 }));
 
-// Row and Column styled components
 const FormRow = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'row',
@@ -166,7 +186,7 @@ const FormColumn = styled(Box)(({ theme }) => ({
   minWidth: 0,
 }));
 
-export default function Profile() {
+export default function UserProfile() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
@@ -179,6 +199,7 @@ export default function Profile() {
   const [user, setUser] = useState({
     firstName: '',
     lastName: '',
+    email: '',
     gender: '',
     contactNumber: '',
     id: '',
@@ -187,6 +208,8 @@ export default function Profile() {
   const [editingUser, setEditingUser] = useState({
     firstName: '',
     lastName: '',
+    email: '',
+    password: '',
     gender: '',
     contactNumber: '',
     id: '',
@@ -195,6 +218,7 @@ export default function Profile() {
   const [originalUser, setOriginalUser] = useState({
     firstName: '',
     lastName: '',
+    email: '',
     gender: '',
     contactNumber: '',
     id: '',
@@ -205,103 +229,141 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+
+  const maskPassword = () => {
+    return '••••••••';
+  };
+
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePassword = (password) => {
+    if (password.length < 8) {
+      return "Password must be at least 8 characters long";
+    }
+    if (!/(?=.*[a-z])/.test(password)) {
+      return "Password must contain at least one lowercase letter";
+    }
+    if (!/(?=.*[A-Z])/.test(password)) {
+      return "Password must contain at least one uppercase letter";
+    }
+    if (!/(?=.*\d)/.test(password)) {
+      return "Password must contain at least one number";
+    }
+    if (!/(?=.*[^a-zA-Z\d])/.test(password)) {
+      return "Password must contain at least one special character";
+    }
+    return null;
+  };
 
   useEffect(() => {
     if (!userObj) {
-      navigate('/');
+      navigate('/login');
       return;
     }
-    
-    // Function to normalize gender values from backend
     const normalizeGender = (genderValue) => {
       if (!genderValue) return '';
-      
       const genderStr = genderValue.toString().toLowerCase();
-      
-      // Map various backend formats to standard values
       if (genderStr === 'male' || genderStr === 'm') return 'Male';
       if (genderStr === 'female' || genderStr === 'f') return 'Female';
       if (genderStr === 'other') return 'Other';
       if (genderStr.includes('prefer not') || genderStr.includes('not specified')) return 'Prefer not to say';
-      
-      // If it already matches our options exactly, return as is
       const validOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
       if (validOptions.includes(genderValue)) return genderValue;
-      
-      // Default fallback
       return genderValue;
     };
-
-    // Helper function to extract last name properly
     const getLastName = (userObj) => {
       if (userObj.lastName || userObj.last_name) {
         return userObj.lastName || userObj.last_name;
       }
-      
       if (userObj.name) {
         const nameParts = userObj.name.split(' ');
         if (nameParts.length > 1) {
           return nameParts.slice(1).join(' ');
         }
       }
-      
       return '';
     };
-    
-    // Enhanced data fetching with proper data handling
     const userData = {
       firstName: String(userObj.firstName || userObj.first_name || userObj.name?.split(' ')[0] || ''),
       lastName: String(getLastName(userObj)),
+      email: String(userObj.email || userObj.emailAddress || ''),
       gender: String(normalizeGender(userObj.gender || userObj.Gender || '')),
       contactNumber: String(userObj.contactNumber || userObj.mobile || userObj.phone || userObj.phoneNumber || userObj.contact || ''),
       id: String(userObj.id || userObj._id || userObj.userId || ''),
     };
-    
-    console.log('Processed user data:', userData);
     setUser(userData);
     setOriginalUser({ ...userData });
-    setEditingUser({ ...userData });
+    setEditingUser({ ...userData, password: '' });
     setLoading(false);
   }, [userObj, navigate]);
 
   const handleEditDialogChange = (e) => {
     const { name, value } = e.target;
-    console.log('Dialog field change:', name, value);
     setEditingUser((prev) => ({ ...prev, [name]: value }));
     setError(null);
     setSuccess(false);
   };
 
   const handleEditClick = () => {
-    setEditingUser({ ...user });
+    setEditingUser({ ...user, password: '' });
     setIsEditDialogOpen(true);
     setError(null);
     setSuccess(false);
   };
 
   const handleDialogClose = () => {
-    setEditingUser({ ...user }); // Reset to current user data
+    setEditingUser({ ...user, password: '' });
     setIsEditDialogOpen(false);
     setError(null);
     setSuccess(false);
+    setShowEditPassword(false);
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
+  const toggleEditPasswordVisibility = () => {
+    setShowEditPassword(!showEditPassword);
   };
 
   const handleSaveClick = async () => {
     setError(null);
     setSuccess(false);
     setSaving(true);
-
     if (!editingUser.firstName.trim() || !editingUser.lastName.trim()) {
       setError('First name and last name are required');
       setSaving(false);
       return;
+    }
+    if (!editingUser.email.trim()) {
+      setError('Email is required');
+      setSaving(false);
+      return;
+    }
+    if (!validateEmail(editingUser.email)) {
+      setError('Please enter a valid email address');
+      setSaving(false);
+      return;
+    }
+    if (editingUser.password && editingUser.password.trim()) {
+      const passwordError = validatePassword(editingUser.password);
+      if (passwordError) {
+        setError(passwordError);
+        setSaving(false);
+        return;
+      }
     }
     if (editingUser.contactNumber && !/^\d{10,15}$/.test(editingUser.contactNumber.replace(/\s+/g, ''))) {
       setError('Please enter a valid mobile number (10-15 digits)');
       setSaving(false);
       return;
     }
-
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -313,27 +375,48 @@ export default function Profile() {
       const payload = {
         firstName: editingUser.firstName.trim(),
         lastName: editingUser.lastName.trim(),
+        email: editingUser.email.trim(),
         gender: editingUser.gender,
         contactNumber: editingUser.contactNumber.trim(),
       };
-      const response = await axios.put(`http://localhost:5000/api/auth/updateuserprofile/${editingUser.id}`, payload, config);
-      const updatedUserData = { ...userObj, ...payload, ...(response.data.user || response.data) };
+      if (editingUser.password && editingUser.password.trim()) {
+        payload.password = editingUser.password.trim();
+      }
+      const response = await axios.put(
+        `http://localhost:5000/api/auth/updateuserprofile/${editingUser.id}`,
+        payload,
+        config
+      );
+      const updatedUserData = {
+        ...userObj,
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        email: payload.email,
+        gender: payload.gender,
+        contactNumber: payload.contactNumber,
+        ...(response.data.data || response.data.user || response.data)
+      };
       localStorage.setItem('user', JSON.stringify(updatedUserData));
       setUserObj(updatedUserData);
-      
-      // Update all user states
-      const newUserData = { ...editingUser, ...payload };
+      const newUserData = {
+        ...editingUser,
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        email: payload.email,
+        gender: payload.gender,
+        contactNumber: payload.contactNumber,
+      };
       setUser(newUserData);
       setOriginalUser({ ...newUserData });
-      setEditingUser({ ...newUserData });
-      
+      setEditingUser({ ...newUserData, password: '' });
       setIsEditDialogOpen(false);
+      setShowEditPassword(false);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError(
-        err.response?.data?.message || 
-        err.response?.data?.error || 
+        err.response?.data?.message ||
+        err.response?.data?.error ||
         'Failed to update profile. Please try again.'
       );
     } finally {
@@ -344,14 +427,16 @@ export default function Profile() {
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    navigate('/');
+    navigate('/login');
     window.location.reload();
   };
 
   if (loading) {
     return (
       <>
-        <AdminNavbar userProfile={userObj} onLogout={handleLogout} />
+        <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+          <Navbar userProfile={userObj} onLogout={handleLogout} />
+        </Box>
         <Container maxWidth="sm" sx={{ mt: 6, display: 'flex', justifyContent: 'center' }}>
           <CircularProgress size={50} thickness={4} sx={{ color: '#667eea' }} />
         </Container>
@@ -361,8 +446,10 @@ export default function Profile() {
 
   return (
     <>
-      <AdminNavbar userProfile={userObj} onLogout={handleLogout} />
-      <Box sx={{ 
+      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+        <Navbar userProfile={userObj} onLogout={handleLogout} />
+      </Box>
+      <Box sx={{
         minHeight: '100vh',
         background: 'linear-gradient(135deg, #ffffffff 0%, #ffffffff 100%)',
         py: { xs: 2, md: 4 }
@@ -375,13 +462,12 @@ export default function Profile() {
         >
           <StyledCard sx={{ maxWidth: '900px', margin: '0 auto' }}>
             <CardContent sx={{ p: { xs: 3, sm: 4, md: 6 } }}>
-              {/* Header */}
-              <Box sx={{ 
-                display: 'flex', 
+              <Box sx={{
+                display: 'flex',
                 flexDirection: 'column',
-                alignItems: 'center', 
+                alignItems: 'center',
                 mb: 5,
-                textAlign: 'center' 
+                textAlign: 'center'
               }}>
                 <Avatar
                   sx={{
@@ -419,19 +505,16 @@ export default function Profile() {
                   Your personal information
                 </Typography>
               </Box>
-
               <Divider sx={{
                 mb: 5,
                 borderColor: 'rgba(102, 126, 234, 0.2)',
                 borderWidth: 1,
               }} />
-
-              {/* Success Alert */}
               {success && (
-                <Alert 
-                  severity="success" 
-                  sx={{ 
-                    mb: 3, 
+                <Alert
+                  severity="success"
+                  sx={{
+                    mb: 3,
                     borderRadius: 3,
                     fontSize: '1rem',
                     '& .MuiAlert-message': { fontWeight: 500 }
@@ -440,16 +523,13 @@ export default function Profile() {
                   Profile updated successfully!
                 </Alert>
               )}
-
-              {/* Profile Display Fields */}
               <Stack spacing={1}>
-                {/* Row 1: First Name and Last Name */}
                 <FormRow>
                   <FormColumn>
                     <FieldLabel>First Name</FieldLabel>
                     <DisplayField>
                       {user.firstName || 'Not provided'}
-                    </DisplayField> 
+                    </DisplayField>
                   </FormColumn>
                   <FormColumn>
                     <FieldLabel>Last Name</FieldLabel>
@@ -458,8 +538,42 @@ export default function Profile() {
                     </DisplayField>
                   </FormColumn>
                 </FormRow>
-
-                {/* Row 2: Gender and Mobile Number */}
+                <FormRow>
+                  <FormColumn>
+                    <FieldLabel>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <EmailIcon sx={{ fontSize: '1rem', color: '#667eea' }} />
+                        Email Address
+                      </Box>
+                    </FieldLabel>
+                    <DisplayField>
+                      {user.email || 'Not provided'}
+                    </DisplayField>
+                  </FormColumn>
+                  <FormColumn>
+                    <FieldLabel>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <LockIcon sx={{ fontSize: '1rem', color: '#667eea' }} />
+                        Password
+                      </Box>
+                    </FieldLabel>
+                    <PasswordDisplayField>
+                      <span style={{ flex: 1 }}>
+                        {showPassword ? 'Password is securely stored' : maskPassword()}
+                      </span>
+                      <IconButton
+                        onClick={togglePasswordVisibility}
+                        size="small"
+                        sx={{
+                          color: '#667eea',
+                          '&:hover': { backgroundColor: 'rgba(102, 126, 234, 0.1)' }
+                        }}
+                      >
+                        {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                      </IconButton>
+                    </PasswordDisplayField>
+                  </FormColumn>
+                </FormRow>
                 <FormRow>
                   <FormColumn>
                     <FieldLabel>Gender</FieldLabel>
@@ -475,8 +589,6 @@ export default function Profile() {
                   </FormColumn>
                 </FormRow>
               </Stack>
-
-              {/* Edit Button */}
               <Box sx={{
                 display: 'flex',
                 mt: 6,
@@ -512,18 +624,16 @@ export default function Profile() {
           </StyledCard>
         </Container>
       </Box>
-
-      {/* Edit Profile Dialog */}
-      <StyledDialog 
-        open={isEditDialogOpen} 
+      <StyledDialog
+        open={isEditDialogOpen}
         onClose={handleDialogClose}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
-        <DialogTitle 
-          sx={{ 
-            textAlign: 'center', 
-            fontWeight: 700, 
+        <DialogTitle
+          sx={{
+            textAlign: 'center',
+            fontWeight: 700,
             fontSize: '1.9rem',
             color: '#333',
             pb: 3,
@@ -544,14 +654,12 @@ export default function Profile() {
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-        
         <DialogContent sx={{ pt: 2, pb: 3 }}>
-          {/* Error Alert */}
           {error && (
-            <Alert 
-              severity="error" 
-              sx={{ 
-                mb: 3, 
+            <Alert
+              severity="error"
+              sx={{
+                mb: 3,
                 borderRadius: 3,
                 fontSize: '1rem',
                 '& .MuiAlert-message': { fontWeight: 500 }
@@ -560,9 +668,18 @@ export default function Profile() {
               {error}
             </Alert>
           )}
-
+          <Alert
+            severity="info"
+            sx={{
+              mb: 3,
+              borderRadius: 3,
+              fontSize: '0.9rem',
+              '& .MuiAlert-message': { fontWeight: 400 }
+            }}
+          >
+            Leave password field empty if you don't want to change your password.
+          </Alert>
           <Stack spacing={3}>
-            {/* Row 1: First Name and Last Name */}
             <FormRow>
               <FormColumn>
                 <StyledTextField
@@ -572,6 +689,7 @@ export default function Profile() {
                   value={editingUser.firstName}
                   onChange={handleEditDialogChange}
                   variant="outlined"
+                  required
                 />
               </FormColumn>
               <FormColumn>
@@ -582,11 +700,64 @@ export default function Profile() {
                   value={editingUser.lastName}
                   onChange={handleEditDialogChange}
                   variant="outlined"
+                  required
                 />
               </FormColumn>
             </FormRow>
-
-            {/* Row 2: Gender and Mobile Number */}
+            <FormRow>
+              <FormColumn>
+                <StyledTextField
+                  fullWidth
+                  label="Email Address"
+                  name="email"
+                  type="email"
+                  value={editingUser.email}
+                  onChange={handleEditDialogChange}
+                  variant="outlined"
+                  required
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <EmailIcon sx={{ color: '#667eea', fontSize: '1.2rem' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </FormColumn>
+            </FormRow>
+            <FormRow>
+              <FormColumn>
+                <StyledTextField
+                  fullWidth
+                  label="New Password (Optional)"
+                  name="password"
+                  type={showEditPassword ? 'text' : 'password'}
+                  value={editingUser.password}
+                  onChange={handleEditDialogChange}
+                  variant="outlined"
+                  placeholder="Leave empty to keep current password"
+                  helperText="Password must be at least 8 characters with uppercase, lowercase, number, and any special character"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <LockIcon sx={{ color: '#667eea', fontSize: '1.2rem' }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={toggleEditPasswordVisibility}
+                          edge="end"
+                          sx={{ color: '#667eea' }}
+                        >
+                          {showEditPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </FormColumn>
+            </FormRow>
             <FormRow>
               <FormColumn>
                 <StyledFormControl fullWidth>
@@ -651,7 +822,6 @@ export default function Profile() {
             </FormRow>
           </Stack>
         </DialogContent>
-
         <DialogActions sx={{ p: 3, pt: 0 }}>
           <Button
             variant="outlined"

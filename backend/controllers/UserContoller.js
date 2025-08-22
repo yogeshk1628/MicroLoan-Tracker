@@ -8,9 +8,35 @@ const cors = require("cors");
 const { sendWelcomeEmail } = require("../middleware/MailMiddleware");
 
 const secretKey = process.env.JWT_SECRET;
+
+const validatePassword = (password) => {
+  if (password.length < 8) {
+    return "Password must be at least 8 characters long";
+  }
+  if (!/(?=.*[a-z])/.test(password)) {
+    return "Password must contain at least one lowercase letter";
+  }
+  if (!/(?=.*[A-Z])/.test(password)) {
+    return "Password must contain at least one uppercase letter";
+  }
+  if (!/(?=.*\d)/.test(password)) {
+    return "Password must contain at least one number";
+  }
+  if (!/(?=.*[^a-zA-Z\d])/.test(password)) {
+    return "Password must contain at least one special character";
+  }
+  return null;
+};
+
 const signup = async (req, res) => {
   try {
     const { firstName, lastName, email, password, gender, contactNumber, role = "user", isActive } = req.body;
+    
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ message: passwordError });
+    }
+    
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
@@ -32,8 +58,6 @@ const signup = async (req, res) => {
   }
 };
 
-
-
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -44,7 +68,6 @@ const loginUser = async (req, res) => {
     const isMatch = await bcrypt.compare(password, existingUser.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials!" });
-
     }
     const token = jwt.sign(
       {
@@ -61,7 +84,7 @@ const loginUser = async (req, res) => {
       { expiresIn: '1y' }
     );
     
-    res.status(200).json({ message: "Login succesfull", token });
+    res.status(200).json({ message: "Login successful", token });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server Error" });
@@ -72,7 +95,6 @@ const getUsersById = async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Only allow users to get their own data or admin to get any user data
     if (req.user.role !== 'admin' && req.user._id.toString() !== id) {
       return res.status(403).json({ message: "Access denied" });
     }
@@ -92,17 +114,38 @@ const getUsersById = async (req, res) => {
 
 const updateuserProfile = async (req, res) => {
   const { id } = req.params;
-  const { firstName, lastName, email, contactNumber, gender } = req.body;
+  const { firstName, lastName, email, contactNumber, gender, password } = req.body;
+  
   try {
+    const updateData = {
+      firstName,
+      lastName,
+      email,
+      contactNumber,
+      gender
+    };
 
-      const updateDetails = await User.findByIdAndUpdate(id, { firstName, lastName, email, contactNumber, gender }, { new: true });
-      if (!updateDetails) {
-          res.status(404).json({ message: "User not found" });
+    if (password && password.trim() !== '') {
+      const passwordError = validatePassword(password);
+      if (passwordError) {
+        return res.status(400).json({ message: passwordError });
       }
-      res.status(200).json({ message: "Details updated succesfully", data: updateDetails })
+      
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+      updateData.password = hashedPassword;
+    }
+
+    const updateDetails = await User.findByIdAndUpdate(id, updateData, { new: true }).select('-password');
+    
+    if (!updateDetails) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    res.status(200).json({ message: "Profile updated successfully", data: updateDetails });
   } catch (error) {
-      console.log(error);
-      res.status(500).json({ message: "Internal Server error" });
+    console.log(error);
+    res.status(500).json({ message: "Internal Server error" });
   }
 };
 
@@ -111,25 +154,30 @@ const updateuserPassword = async (req, res) => {
   const { oldPassword, newPassword, confirmPassword } = req.body;
 
   try {
-      const existingUser = await User.findById(id);
-      if (!existingUser) return res.status(404).json({ message: "Not found" })
+    const existingUser = await User.findById(id);
+    if (!existingUser) return res.status(404).json({ message: "User not found" });
 
-      const isMatch = await bcrypt.compare(oldPassword, existingUser.password);
-      if (!isMatch) return res.status(404).json({ message: "Current password is wrong" });
-      if (confirmPassword !== newPassword) {
-          return res.status(400).json({ message: "Incorrect password" })
-      }
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(newPassword, salt);
+    const isMatch = await bcrypt.compare(oldPassword, existingUser.password);
+    if (!isMatch) return res.status(400).json({ message: "Current password is incorrect" });
+    
+    if (confirmPassword !== newPassword) {
+      return res.status(400).json({ message: "New passwords do not match" });
+    }
 
-      const updatePassword = await User.findByIdAndUpdate(id, { password: hashedPassword }, { new: true });
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      return res.status(400).json({ message: passwordError });
+    }
 
-      res.status(200).json({ message: "Password updated", data: updatePassword });
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
 
+    const updatePassword = await User.findByIdAndUpdate(id, { password: hashedPassword }, { new: true }).select('-password');
 
+    res.status(200).json({ message: "Password updated successfully", data: updatePassword });
   } catch (error) {
-      console.log(error);
-      res.status(500).json({ message: "Internal server error" });
+    console.log(error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -168,21 +216,19 @@ const forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp = otp;
-    user.otpExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes
+    user.otpExpiry = Date.now() + 5 * 60 * 1000;
     await user.save();
 
-    // Send OTP mail
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: "gmail",
       auth: { 
         user: process.env.MAIL_USER, 
         pass: process.env.MAIL_PASS 
       },
       tls: {
-                rejectUnauthorized: false
+        rejectUnauthorized: false
       }
     });
 
@@ -229,11 +275,11 @@ const resendOtp = async (req, res) => {
     user.otpExpiry = Date.now() + 5 * 60 * 1000;
     await user.save();
 
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: "gmail",
       auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
       tls: {
-                rejectUnauthorized: false
+        rejectUnauthorized: false
       }
     });
 
@@ -261,10 +307,14 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      return res.status(400).json({ message: passwordError });
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
 
-    // ✅ clear OTP after reset
     user.otp = undefined;
     user.otpExpiry = undefined;
     await user.save();
@@ -276,6 +326,15 @@ const resetPassword = async (req, res) => {
   }
 };
 
-
-
-module.exports = { signup, loginUser, getUsersById, updateuserPassword, updateuserProfile, toggleUserStatus, forgotPassword, verifyOtp, resendOtp, resetPassword }
+module.exports = { 
+  signup, 
+  loginUser, 
+  getUsersById, 
+  updateuserPassword, 
+  updateuserProfile, 
+  toggleUserStatus, 
+  forgotPassword, 
+  verifyOtp, 
+  resendOtp, 
+  resetPassword 
+};

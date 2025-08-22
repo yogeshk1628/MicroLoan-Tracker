@@ -30,10 +30,8 @@ export default function UserNavbar({ userProfile, onLogout }) {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
 
-  // Get user info from localStorage or props
   const user = userProfile || (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null);
 
-  // Navigation Links for User Panel
   const links = (
     <>
       {userNavLinks.map((link) => (
@@ -69,6 +67,10 @@ export default function UserNavbar({ userProfile, onLogout }) {
     window.location.reload();
   };
 
+  const handleProfileClick = () => {
+    navigate('/user/profile');
+  };
+
   return (
     <>
       <AppBar 
@@ -89,7 +91,6 @@ export default function UserNavbar({ userProfile, onLogout }) {
             px: { xs: 2, sm: 3 },
           }}
         >
-          {/* Left - Company Name with User Badge */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography
               variant="h6"
@@ -117,7 +118,6 @@ export default function UserNavbar({ userProfile, onLogout }) {
             />
           </Box>
 
-          {/* Center - User Navigation Links (Desktop) */}
           {!isMobile && (
             <Box
               sx={{
@@ -131,11 +131,15 @@ export default function UserNavbar({ userProfile, onLogout }) {
             </Box>
           )}
 
-          {/* Right - User Profile & Logout */}
           {!isMobile ? (
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <AccountCircleIcon sx={{ fontSize: 32 }} />
-              <Box sx={{ ml: 1 }}>
+              <IconButton onClick={handleProfileClick} sx={{ color: 'inherit' }}>
+                <AccountCircleIcon sx={{ fontSize: 32 }} />
+              </IconButton>
+              <Box 
+                sx={{ ml: 1, cursor: 'pointer' }}
+                onClick={handleProfileClick}
+              >
                 <Typography variant="body1" sx={{ fontWeight: 600, lineHeight: 1.2 }}>
                   {user?.firstName || user?.name || 'User'} {user?.lastName || ''}
                 </Typography>
@@ -163,7 +167,6 @@ export default function UserNavbar({ userProfile, onLogout }) {
               </Button>
             </Box>
           ) : (
-            // Mobile - Hamburger Menu
             <IconButton
               color="inherit"
               aria-label="open drawer"
@@ -179,7 +182,6 @@ export default function UserNavbar({ userProfile, onLogout }) {
         </Toolbar>
       </AppBar>
 
-      {/* Mobile Drawer */}
       <Drawer
         anchor="right"
         open={drawerOpen}
@@ -194,7 +196,6 @@ export default function UserNavbar({ userProfile, onLogout }) {
         }}
       >
         <Box sx={{ pt: 3, px: 3 }}>
-          {/* User Profile Section in Mobile Drawer */}
           <Box
             sx={{
               display: 'flex',
@@ -206,6 +207,11 @@ export default function UserNavbar({ userProfile, onLogout }) {
               borderRadius: 3,
               backgroundColor: 'rgba(255, 255, 255, 0.1)',
               backdropFilter: 'blur(10px)',
+              cursor: 'pointer',
+            }}
+            onClick={() => {
+              setDrawerOpen(false);
+              handleProfileClick();
             }}
           >
             <AccountCircleIcon sx={{ fontSize: 48 }} />
@@ -217,28 +223,30 @@ export default function UserNavbar({ userProfile, onLogout }) {
                 Valued Customer
               </Typography>
             </Box>
-            <Button
-              variant="contained"
-              onClick={() => {
-                setDrawerOpen(false);
-                handleLogout();
-              }}
-              sx={{
-                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                color: 'white',
-                fontWeight: 700,
-                borderRadius: 3,
-                px: 4,
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                },
-              }}
-            >
-              Logout
-            </Button>
           </Box>
 
-          {/* User Navigation Links */}
+          <Button
+            variant="contained"
+            onClick={() => {
+              setDrawerOpen(false);
+              handleLogout();
+            }}
+            sx={{
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              color: 'white',
+              fontWeight: 700,
+              borderRadius: 3,
+              px: 4,
+              mb: 3,
+              width: '100%',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+              },
+            }}
+          >
+            Logout
+          </Button>
+
           <List sx={{ pt: 0 }}>
             {userNavLinks.map((link) => (
               <ListItemButton 
